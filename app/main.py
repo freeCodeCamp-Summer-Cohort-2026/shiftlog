@@ -50,6 +50,7 @@ app.include_router(shifts.router)
 def root():
     return {"service": "shiftlog", "status": "ok", "status_code": 200}
 
+# Add endpoint for health check
 @app.get("/health")
 def health(session: Session = Depends(get_session)):
     try:

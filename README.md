@@ -60,6 +60,12 @@ pytest
 
 ## API overview
 
+### General
+
+| Method | Path            | Description                         |
+|--------|-----------------|-------------------------------------|
+| GET    | `/health`       | Check application health            |
+
 ### Workers
 
 | Method | Path            | Description                |
