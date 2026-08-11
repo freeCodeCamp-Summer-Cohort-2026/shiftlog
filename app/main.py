@@ -2,11 +2,13 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, status
 
-from app.background import upcoming_shifts_loop
-from app.database import create_db_and_tables
+from app.background import Session, upcoming_shifts_loop
+from app.database import create_db_and_tables, get_session
 from app.routers import shifts, workers
+
+from sqlalchemy import text
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("shiftlog.main")
@@ -44,7 +46,18 @@ app = FastAPI(
 app.include_router(workers.router)
 app.include_router(shifts.router)
 
-
 @app.get("/")
 def root():
-    return {"service": "shiftlog", "status": "ok"}
+    return {"service": "shiftlog", "status": "ok", "status_code": 200}
+
+@app.get("/health")
+def health(session: Session = Depends(get_session)):
+    try:
+        session.execute(text("SELECT 1"))
+        return {"service": "shiftlog", "status": "ok", "status_code": 200}
+    except Exception as e:
+        logger.exception("Health check failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"service": "shiftlog", "status": "error", "status_code": 503, "details": str(e)},
+        )
