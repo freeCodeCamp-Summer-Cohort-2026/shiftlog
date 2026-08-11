@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from tests import test_shifts
 
+
 def test_create_worker(client: TestClient):
     response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     assert response.status_code == 201
@@ -9,6 +10,7 @@ def test_create_worker(client: TestClient):
     assert body["name"] == "Jamie Lee"
     assert body["role"] == "Cook"
     assert "id" in body
+
 
 def test_update_worker(client: TestClient):
     create_res = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
@@ -20,6 +22,7 @@ def test_update_worker(client: TestClient):
     body = update_res.json()
     assert body["id"] == worker_id
     assert body["role"] == "Head Chef"
+
 
 def test_update_worker_not_found(client: TestClient):
     response = client.put("/workers/9999", json={"name": "Nobody", "role": "Ghost"})
@@ -70,8 +73,11 @@ def test_get_worker_with_no_matching_role(client: TestClient):
     names = {w["name"] for w in response.json()}
     assert names == set()
 
+
 # using a parameterized function to test several case-insensitive inputs, including just firstname
-@pytest.mark.parametrize("search_query,expected", [("jamie", {"Jamie Lee"}), ("Jamie", {"Jamie Lee"}), ("Jamie Lee", {"Jamie Lee"})])
+@pytest.mark.parametrize(
+    "search_query,expected", [("jamie", {"Jamie Lee"}), ("Jamie", {"Jamie Lee"}), ("Jamie Lee", {"Jamie Lee"})]
+)
 def test_get_worker_with_matching_name(client: TestClient, search_query: str, expected: set):
     client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
@@ -79,6 +85,7 @@ def test_get_worker_with_matching_name(client: TestClient, search_query: str, ex
     response = client.get(f"/workers?name={search_query}")
     names = {w["name"] for w in response.json()}
     assert names == expected
+
 
 def test_get_worker_with_no_matching_name(client: TestClient):
     client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
@@ -88,6 +95,7 @@ def test_get_worker_with_no_matching_name(client: TestClient):
     names = {w["name"] for w in response.json()}
     assert names == set()
 
+
 def test_get_worker_with_role_and_name(client: TestClient):
     client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
@@ -95,6 +103,7 @@ def test_get_worker_with_role_and_name(client: TestClient):
     response = client.get("/workers?role=Cashier&name=Sam Osei")
     names = {w["name"] for w in response.json()}
     assert names == {"Sam Osei"}
+
 
 def test_worker_summary_unknown_worker(client: TestClient):
     response = client.get("/workers/9999/summary")
@@ -157,11 +166,12 @@ def test_worker_summary_within_range(client: TestClient):
     response_summary_out = client.get(f"/workers/{worker_id}/summary?start=2026-09-09T09:00:00&end=2026-09-09T17:00:00")
     assert response_summary_out.status_code == 200
 
-    assert response_summary_out.json()["shift_count"]==0
-    assert response_summary_out.json()["total_hours"]==0
+    assert response_summary_out.json()["shift_count"] == 0
+    assert response_summary_out.json()["total_hours"] == 0
+
 
 def test_worker_delete(client: TestClient):
-    post_worker_response = client.post("/workers", json={"name": "Jamie Lee", "role":"Cook"})
+    post_worker_response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     assert post_worker_response.status_code == 201
     worker_body = post_worker_response.json()
     assert worker_body["name"] == "Jamie Lee"
@@ -195,9 +205,7 @@ def test_worker_delete(client: TestClient):
 
 
 def test_deactivate_worker(client: TestClient):
-    worker = client.post(
-        "/workers", json={"name": "Jamie Lee", "role": "Cook"}
-    ).json()
+    worker = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"}).json()
 
     response = client.put(
         f"/workers/{worker['id']}",
@@ -209,9 +217,7 @@ def test_deactivate_worker(client: TestClient):
 
 
 def test_inactive_worker_excluded_from_default_list(client: TestClient):
-    inactive_worker = client.post(
-        "/workers", json={"name": "Jamie Lee", "role": "Cook"}
-    ).json()
+    inactive_worker = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"}).json()
     client.put(
         f"/workers/{inactive_worker['id']}",
         json={

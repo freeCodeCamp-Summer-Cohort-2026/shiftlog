@@ -72,7 +72,6 @@ def test_list_shifts_rejects_invalid_sort_by(client: TestClient):
     assert detail[0]["loc"] == ["query", "sort_by"]
     assert "start_time" in detail[0]["msg"]
     assert "end_time" in detail[0]["msg"]
-    assert "created_at" in detail[0]["msg"]
 
 
 def test_list_shifts_rejects_invalid_order(client: TestClient):

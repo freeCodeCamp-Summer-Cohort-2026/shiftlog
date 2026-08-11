@@ -5,12 +5,15 @@ creation on startup (see app.main) instead of using Alembic migrations.
 """
 
 import os
-
+from dotenv import load_dotenv
 from sqlmodel import Session, SQLModel, create_engine
 
+
+# Load variables from .env into os.environ
+load_dotenv()
+
 DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://shiftlog:shiftlog_dev_password@localhost:5432/shiftlog",
+    "DATABASE_URLpostgresql://shiftlog:shiftlog_dev_password@localhost:5432/shiftlog",
 )
 
 # `echo=False` keeps app logs readable; flip to True locally if you need to
