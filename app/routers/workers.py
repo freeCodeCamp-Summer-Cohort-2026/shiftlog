@@ -27,3 +27,11 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
     return worker
+
+@router.delete("/{worker_id}", status_code=204)
+def delete_worker(worker_id: int, session: Session = Depends(get_session)):
+    worker = session.get(Worker, worker_id)
+    if worker is None:
+        raise HTTPException(status_code=404, detail="Worker not found")
+    session.delete(worker)
+    session.commit()
