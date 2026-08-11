@@ -81,7 +81,7 @@ A shift conflicts with another shift for the _same worker_ when their time
 ranges overlap. Back-to-back shifts (one ending exactly when the next
 starts) are not conflicts.
 
-## Testing Endpoints
+## Getting Started / Testing Examples 🧪
 
 ### 1. Create a Worker (`POST /workers`)
 
