@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import ValidationError
+from sqlalchemy import asc, desc
 from sqlmodel import Session, select
 
 from app.conflicts import find_conflicting_shifts
@@ -40,9 +40,11 @@ def create_shift(shift: ShiftCreate, session: Session = Depends(get_session)):
 
 @router.get("", response_model=list[ShiftRead])
 def list_shifts(
-    worker_id: Optional[int] = None,
-    start_after: Optional[datetime] = None,
-    end_before: Optional[datetime] = None,
+    worker_id: int | None = None,
+    start_after: datetime | None = None,
+    end_before: datetime | None = None,
+    sort_by: Literal["start_time", "end_time", "created_at"] | None = None,
+    order: Literal["asc", "desc"] = "asc",
     session: Session = Depends(get_session),
 ):
     """List shifts, optionally filtered by worker and/or a date range.
@@ -58,7 +60,14 @@ def list_shifts(
         statement = statement.where(Shift.start_time >= start_after)
     if end_before is not None:
         statement = statement.where(Shift.start_time <= end_before)
-    statement = statement.order_by(Shift.start_time)
+    sort_column = {
+        "start_time": Shift.start_time,
+        "end_time": Shift.end_time,
+        "created_at": Shift.created_at,
+    }[sort_by or "start_time"]
+    statement = statement.order_by(
+        asc(sort_column) if order == "asc" else desc(sort_column)
+    )
 
     return session.exec(statement).all()
 
