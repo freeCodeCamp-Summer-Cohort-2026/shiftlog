@@ -13,7 +13,8 @@ from sqlmodel import Session, SQLModel, create_engine
 load_dotenv()
 
 DATABASE_URL = os.getenv(
-    "DATABASE_URLpostgresql://shiftlog:shiftlog_dev_password@localhost:5432/shiftlog",
+    "DATABASE_URL",
+    "postgresql://shiftlog:shiftlog_dev_password@localhost:5432/shiftlog",
 )
 
 # `echo=False` keeps app logs readable; flip to True locally if you need to
