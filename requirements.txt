@@ -1,3 +1,6 @@
+# Requires Python 3.12 (see .python-version) - psycopg2-binary 2.9.9 has no
+# prebuilt wheel for 3.13+, so pip tries a source build and fails without
+# Postgres dev headers.
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sqlmodel==0.0.22
