@@ -40,9 +40,7 @@ class ShiftBase(SQLModel):
     def end_after_start(cls, end_time: datetime, info):
         start_time = info.data.get("start_time")
         if start_time is not None and end_time <= start_time:
-            # NOTE: this message is intentionally basic - see the "improve
-            # error message for invalid time ranges" issue for follow-up.
-            raise ValueError("end_time must be after start_time")
+            raise ValueError(f"end_time ({end_time.isoformat()}) must be after start_time ({start_time.isoformat()})")
         return end_time
 
 
