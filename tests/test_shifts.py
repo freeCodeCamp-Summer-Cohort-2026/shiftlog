@@ -45,3 +45,21 @@ def test_delete_shift(client: TestClient, worker_id: int):
 
     get_response = client.get(f"/shifts/{shift_id}")
     assert get_response.status_code == 404
+
+
+def test_delete_nonexistent_shift(client: TestClient, worker_id: int):
+    create = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-12T09:00:00",
+            "end_time": "2026-08-12T17:00:00",
+        },
+    )
+    shift_id = create.json()["id"]
+
+    delete_response = client.delete(f"/shifts/{shift_id+9999}")
+    assert delete_response.status_code == 404
+
+    get_response = client.get(f"/shifts/{shift_id}")
+    assert get_response.status_code == 200
