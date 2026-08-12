@@ -14,6 +14,18 @@ router = APIRouter(prefix="/shifts", tags=["shifts"])
 
 @router.post("", response_model=ShiftRead, status_code=201)
 def create_shift(shift: ShiftCreate, session: Session = Depends(get_session)):
+    """
+    POST request: 
+    ----------
+    - Create a shift for a worker (using the worker ID)
+    --
+    Fields
+    - **Start time**
+    - **End time**
+    - **Worker ID**
+    ---
+    - If a worker ID does not exist, an error will be thrown.
+    """
     worker = session.get(Worker, shift.worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -65,6 +77,17 @@ def list_shifts(
 
 @router.get("/{shift_id}", response_model=ShiftRead)
 def get_shift(shift_id: int, session: Session = Depends(get_session)):
+    """
+    GET request: 
+    ---
+    Get a shift record, `{parameter}` required is the shift record ID. 
+    ---
+    Returns:
+    - `worker_id`
+    - `start_time`
+    - `end_time`
+    - `id` -> this is the shift record ID.
+    """
     shift = session.get(Shift, shift_id)
     if shift is None:
         raise HTTPException(status_code=404, detail="Shift not found")
@@ -73,6 +96,15 @@ def get_shift(shift_id: int, session: Session = Depends(get_session)):
 
 @router.delete("/{shift_id}", status_code=204)
 def delete_shift(shift_id: int, session: Session = Depends(get_session)):
+    """
+    DELETE request:
+    ---
+    Delete a shift record. 
+    ---
+    Required parameter is the shift record `id` 
+    ---
+    If there is no matching ID a "Shift not found" error is thrown. 
+    """
     shift = session.get(Shift, shift_id)
     if shift is None:
         raise HTTPException(status_code=404, detail="Shift not found")
