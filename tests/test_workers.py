@@ -16,7 +16,7 @@ def test_create_worker_requires_name(client: TestClient):
 
 
 def test_create_worker_sanitizes_name(client: TestClient):
-    response = client.post("/workers", json={"name": " Alice Rivera ", "role": "Cook"})
+    response = client.post("/workers", json={"name": "Alice   Rivera", "role": "Cook"})
     assert response.status_code == 201
     body = response.json()
     assert body["name"] == "Alice Rivera"
