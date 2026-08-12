@@ -102,18 +102,15 @@ curl -X POST http://localhost:8000/workers -H "Content-Type: application/json" -
 }
 ```
 
-**Error (422 Unprocessable Entity):**
+**Error (400 Bad Request):**
 
 ```json
 {
   "detail": [
     {
-      "type": "missing",
-      "loc": ["body", "role"],
-      "msg": "Field required",
-      "input": {
-        "name": "Hikari"
-      }
+      "loc": ["string", 0],
+      "msg": "string",
+      "type": "string"
     }
   ]
 }
@@ -167,10 +164,9 @@ curl -X GET http://localhost:8000/workers/1
 {
   "detail": [
     {
-      "type": "int_parsing",
-      "loc": ["path", "worker_id"],
-      "msg": "Input should be a valid integer, unable to parse string as an integer",
-      "input": "not-an-int"
+      "loc": ["string", 0],
+      "msg": "string",
+      "type": "string"
     }
   ]
 }
@@ -223,13 +219,9 @@ curl -X 'POST' \
 {
   "detail": [
     {
-      "type": "missing",
-      "loc": ["body", "end_time"],
-      "msg": "Field required",
-      "input": {
-        "worker_id": 1,
-        "start_time": "2026-08-11T13:06:46.203Z"
-      }
+      "loc": ["string", 0],
+      "msg": "string",
+      "type": "string"
     }
   ]
 }
@@ -263,13 +255,9 @@ curl -X 'GET' \
 {
   "detail": [
     {
-      "type": "datetime_from_date_parsing",
-      "loc": ["query", "start_after"],
-      "msg": "Input should be a valid datetime or date, invalid character in year",
-      "input": "not-a-date",
-      "ctx": {
-        "error": "invalid character in year"
-      }
+      "loc": ["string", 0],
+      "msg": "string",
+      "type": "string"
     }
   ]
 }
