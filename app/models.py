@@ -58,7 +58,6 @@ class ShiftCreate(ShiftBase):
 class ShiftRead(ShiftBase):
     id: int
     created_at: datetime
-     
     @computed_field
     @property
     def duration_hours(self) -> float:
