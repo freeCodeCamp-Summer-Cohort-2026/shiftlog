@@ -106,7 +106,7 @@ Note: `shiftlog-api-1` is the name of the container running the Shiftlog API, wh
 A shift conflicts with another shift for the _same worker_ when their time
 ranges overlap. Back-to-back shifts (one ending exactly when the next
 starts) are not conflicts.
-A shift conflicts with another shift for the same worker when their time ranges overlap. Back-to-back shifts (one ending exactly when the next starts) are not conflicts.
+
 
 ### How conflict detection works
 
