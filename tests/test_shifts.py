@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from datetime import datetime, timedelta
 
 
 def test_create_shift(client: TestClient, worker_id: int):
@@ -63,3 +64,33 @@ def test_delete_nonexistent_shift(client: TestClient, worker_id: int):
 
     get_response = client.get(f"/shifts/{shift_id}")
     assert get_response.status_code == 200
+
+def test_upcoming_shifts_returns_only_within_window(client: TestClient, worker_id: int):
+    now=datetime.utcnow()
+
+    # case 1: inside the window (starts in 10 minutes)
+    within_window=client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": (now+timedelta(minutes=10)).isoformat(),
+            "end_time": (now+timedelta(hours=1)).isoformat()
+        }
+    ).json()
+
+    # case 2: outside window (starts in 5 hours)
+    out_of_window=client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": (now+timedelta(hours=5)).isoformat(),
+            "end_time": (now+timedelta(hours=6)).isoformat()
+        }
+    ).json()
+
+    response=client.get("/shifts/upcoming?minutes=30")
+
+    assert response.status_code==200
+    ids=[s["id"] for s in response.json()]
+    assert within_window["id"] in ids
+    assert out_of_window["id"] not in ids

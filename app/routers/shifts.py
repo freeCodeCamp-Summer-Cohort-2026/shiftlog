@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from app.conflicts import find_conflicting_shifts
 from app.database import get_session
 from app.models import Shift, ShiftCreate, ShiftRead, Worker
+from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
 
@@ -61,6 +62,15 @@ def list_shifts(
     statement = statement.order_by(Shift.start_time)
 
     return session.exec(statement).all()
+
+@router.get("/upcoming", response_model=list[ShiftRead])
+def list_upcoming_shifts(
+    minutes: int=DEFAULT_LOOKAHEAD_MINUTES,
+    session: Session=Depends(get_session)
+):
+    """Shifts starting within the next `minutes` (defaults to the background
+    job's lookahead window)."""
+    return get_upcoming_shifts(session, minutes)
 
 
 @router.get("/{shift_id}", response_model=ShiftRead)
