@@ -9,6 +9,7 @@ router = APIRouter(prefix="/workers", tags=["workers"])
 
 @router.post("", response_model=WorkerRead, status_code=201)
 def create_worker(worker: WorkerCreate, session: Session = Depends(get_session)):
+    worker.name = " ".join(worker.name.split())
     db_worker = Worker.model_validate(worker)
     session.add(db_worker)
     session.commit()

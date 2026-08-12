@@ -36,8 +36,15 @@ docker-compose exec api python seed.py
 
 ### Running locally without Docker
 
+**Requires Python 3.12** (see `.python-version`). `psycopg2-binary==2.9.9`
+only ships prebuilt wheels through Python 3.12 - on 3.13+ pip falls back to
+building it from source, which fails unless you happen to have PostgreSQL's
+dev headers installed. If `pip install -r requirements.txt` fails with a
+"Getting requirements to build wheel" error, this is almost certainly why -
+switch to 3.12 rather than trying to fix the build.
+
 ```bash
-python -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
@@ -58,7 +65,26 @@ pip install -r requirements.txt
 pytest
 ```
 
+### Running tests with Docker
+
+You can run the tests against an actual instance of Shiftlog, be sure it is a development instance, because tests may cause data changes or loss:
+
+```bash
+docker exec -it shiftlog-api-1 pytest
+# or
+docker compose exec api pytest
+```
+
+Note: `shiftlog-api-1` is the name of the container running the Shiftlog API, which you need to confirm.
+
+
 ## API overview
+
+### General
+
+| Method | Path            | Description                         |
+|--------|-----------------|-------------------------------------|
+| GET    | `/health`       | Check application health            |
 
 ### Workers
 
@@ -80,6 +106,27 @@ pytest
 A shift conflicts with another shift for the _same worker_ when their time
 ranges overlap. Back-to-back shifts (one ending exactly when the next
 starts) are not conflicts.
+A shift conflicts with another shift for the same worker when their time ranges overlap. Back-to-back shifts (one ending exactly when the next starts) are not conflicts.
+
+### How conflict detection works
+
+ShiftLog checks for overlap with a standard half-open interval test:
+
+    existing.start_time < new.end_time AND existing.end_time > new.start_time
+
+If both conditions are true, the shifts overlap and the new shift is rejected with a 409.
+
+**Example — conflict:**
+- Existing shift: 9:00 AM – 5:00 PM
+- New shift: 3:00 PM – 11:00 PM
+
+`9:00 < 11:00` ✅ and `5:00 > 3:00` ✅ → both true, so this **conflicts**.
+
+**Example — back-to-back, not a conflict:**
+- Existing shift: 9:00 AM – 5:00 PM
+- New shift: 5:00 PM – 11:00 PM
+
+`5:00 > 5:00` is **false**, so the check fails and the shift is **allowed**. One shift ending exactly when the next begins does not overlap.
 
 ## Getting Started / Testing Examples 🧪
 
