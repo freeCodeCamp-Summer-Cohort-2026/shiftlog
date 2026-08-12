@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from app.database import get_session
-from app.models import Worker, WorkerCreate, WorkerRead
+from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate
 
 router = APIRouter(prefix="/workers", tags=["workers"])
 
@@ -22,6 +22,35 @@ def create_worker(worker: WorkerCreate, session: Session = Depends(get_session))
     session.add(db_worker)
     session.commit()
     session.refresh(db_worker)
+    return db_worker
+
+@router.put("/{worker_id}", response_model=WorkerRead)
+def update_worker(worker_id: int, worker: WorkerUpdate, session: Session = Depends(get_session)):
+    """
+    PUT request:
+    Update an existing worker's details by their ID.    
+    -----------
+    - **worker_id**: integer database ID
+    - **name**: string
+    - **role**: string
+    -----------
+    Returns the updated worker object.
+    Throws a 404 error if worker is not found.
+    """
+    db_worker = session.get(Worker, worker_id)
+    if db_worker is None:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+       # Sanitize spaces in name (same as create_worker)
+    worker.name = " ".join(worker.name.split())
+
+    # Update worker attributes
+    db_worker.name = worker.name
+    db_worker.role = worker.role
+    session.add(db_worker)
+    session.commit()
+    session.refresh(db_worker)
+    
     return db_worker
 
 

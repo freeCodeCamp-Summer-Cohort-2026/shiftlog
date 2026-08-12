@@ -25,6 +25,9 @@ class Worker(WorkerBase, table=True):
 class WorkerCreate(WorkerBase):
     pass
 
+class WorkerUpdate(WorkerBase):
+    pass
+
 
 class WorkerRead(WorkerBase):
     id: int
