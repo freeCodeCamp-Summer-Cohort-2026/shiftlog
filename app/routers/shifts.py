@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 
 from app.conflicts import find_conflicting_shifts
 from app.database import get_session
-from app.models import Shift, ShiftCreate, ShiftRead, Worker
+from app.models import Shift, ShiftConflictGroup, ShiftCreate, ShiftRead, Worker
 from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
@@ -94,6 +94,41 @@ def list_upcoming_shifts(
     return get_upcoming_shifts(session, minutes)
 
 
+@router.get("/conflicts", response_model=list[ShiftConflictGroup])
+def list_conflicts(session: Session = Depends(get_session)):
+    """List all workers with conflicting shifts, along with the conflicting shifts.
+
+    This endpoint is useful for identifying scheduling issues.
+    """
+    statement = select(Shift).order_by(Shift.worker_id, Shift.start_time)
+    all_shifts = session.exec(statement).all()
+
+    shifts_by_worker: dict[int, list[Shift]] = {}
+    for shift in all_shifts:
+        shifts_by_worker.setdefault(shift.worker_id, []).append(shift)
+
+    conflict_groups = []
+    for worker_id, shifts in shifts_by_worker.items():
+        conflicting = set()
+        for shift in shifts:
+            conflicts = find_conflicting_shifts(
+                session, worker_id, shift.start_time, shift.end_time, exclude_shift_id=shift.id
+            )
+            if conflicts:
+                conflicting.add(shift.id)
+                conflicting.update(c.id for c in conflicts)
+
+        if conflicting:
+            conflicting_shifts = [s for s in shifts if s.id in conflicting]
+            conflict_groups.append(
+                ShiftConflictGroup(
+                    worker_id=worker_id,
+                    conflicting_shifts=[ShiftRead.model_validate(s) for s in conflicting_shifts],
+                )
+            )
+    return conflict_groups
+
+
 @router.get("/{shift_id}", response_model=ShiftRead)
 def get_shift(shift_id: int, session: Session = Depends(get_session)):
     """
@@ -129,3 +164,4 @@ def delete_shift(shift_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Shift not found")
     session.delete(shift)
     session.commit()
+

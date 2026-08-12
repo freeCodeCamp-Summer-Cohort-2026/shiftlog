@@ -65,3 +65,7 @@ class ShiftRead(ShiftBase):
         shift_duration = (self.end_time - self.start_time).total_seconds() / 3600
         return shift_duration
 
+
+class ShiftConflictGroup(SQLModel):
+    worker_id: int
+    conflicting_shifts: list[ShiftRead]
