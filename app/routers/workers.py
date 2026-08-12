@@ -17,6 +17,7 @@ def create_worker(worker: WorkerCreate, session: Session = Depends(get_session))
     ----------
     An ID will be auto-assigned as a key in the database with the column name "id".
     """
+    worker.name = " ".join(worker.name.split())
     db_worker = Worker.model_validate(worker)
     session.add(db_worker)
     session.commit()
