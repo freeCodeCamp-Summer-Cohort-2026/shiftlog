@@ -41,7 +41,7 @@ def update_worker(worker_id: int, worker: WorkerUpdate, session: Session = Depen
     if db_worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
 
-       # Sanitize spaces in name (same as create_worker)
+    # Sanitize spaces in name (same as create_worker)
     worker.name = " ".join(worker.name.split())
 
     # Update worker attributes

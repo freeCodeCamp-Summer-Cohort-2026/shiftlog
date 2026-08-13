@@ -92,15 +92,18 @@ Note: `shiftlog-api-1` is the name of the container running the Shiftlog API, wh
 | POST   | `/workers`      | Create a worker     |
 | GET    | `/workers`      | List all workers    |
 | GET    | `/workers/{id}` | Get a single worker |
+| PUT    | `/workers/{id}` | Update a worker     |
+| DELETE | `/workers/{id}` | Delete a worker     |
 
 ### Shifts
 
 | Method | Path           | Description                                                                  |
-| ------ | -------------- | ---------------------------------------------------------------------------- |
+| ------ | -------------- | ---------- |
 | POST   | `/shifts`      | Create a shift (rejects overlapping shifts, 409)                             |
 | GET    | `/shifts`      | List shifts, optionally filtered by `worker_id`, `start_after`, `end_before` |
 | GET    | `/shifts/{id}` | Get a single shift                                                           |
-| DELETE | `/shifts/{id}` | Delete a shift                                                               |
+| DELETE | `/shifts/{id}` | Delete a shift                                                           |
+| PUT    | `/shifts/{id}` | Update a shift                      |
 
 A shift conflicts with another shift for the _same worker_ when their time
 ranges overlap. Back-to-back shifts (one ending exactly when the next
@@ -133,7 +136,7 @@ If both conditions are true, the shifts overlap and the new shift is rejected wi
 ### 1. Create a Worker (`POST /workers`)
 
 ```bash
-curl -X POST http://localhost:8000/workers -H "Content-Type: application/json" -d '{
+curl -X 'POST' http://localhost:8000/workers -H "Content-Type: application/json" -d '{
 "name": "Hikari",
 "role": "Rubber Duck"
 }'
@@ -223,7 +226,76 @@ curl -X GET http://localhost:8000/workers/1
 }
 ```
 
-### 4. Create a Shift (`POST /shifts`)
+### 4. Update a Worker (`PUT /workers/{id}`)
+
+```bash
+curl -X 'PUT' \
+  'http://localhost:8000/workers/1' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "Hikari",
+    "role": "Rubber Duck"
+  }'
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": 1,
+  "name": "Hikari",
+  "role": "Rubber Duck"
+}
+```
+
+**Error (404 Not Found):**
+
+```json
+{
+  "detail": "Worker not found"
+}
+```
+
+**Error (422 Unprocessable Entity):**
+
+```json
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "role"],
+      "msg": "Field required",
+      "input": {
+        "name": "Hikari"
+      }
+    }
+  ]
+}
+```
+
+### 5. Delete a Worker (`DELETE /workers/{id}`)
+
+```bash
+curl -X 'DELETE' \
+  'http://localhost:8000/workers/1' \
+  -H 'accept: */*'
+```
+
+**Response (204 No Content):**
+
+```
+
+```
+
+**Error (404 Not Found):**
+
+```json
+{
+  "detail": "Worker not found"
+}
+```
+
+### 6. Create a Shift (`POST /shifts`)
 
 ```bash
 curl -X 'POST' \
@@ -282,7 +354,7 @@ curl -X 'POST' \
 }
 ```
 
-### 5. List shifts, optionally filtered by `worker_id`, `start_after`, `end_before` (`GET /shifts`)
+### 7. List shifts, optionally filtered by `worker_id`, `start_after`, `end_before` (`GET /shifts`)
 
 ```bash
 curl -X 'GET' \
@@ -322,7 +394,7 @@ curl -X 'GET' \
 }
 ```
 
-### 6. Get a Single Shift (`GET /shifts/{id}`)
+### 8. Get a Single Shift (`GET /shifts/{id}`)
 
 ```bash
 curl -X 'GET' \
@@ -350,7 +422,7 @@ curl -X 'GET' \
 }
 ```
 
-### 7. Delete a Shift (`DELETE /shifts/{id}`)
+### 9. Delete a Shift (`DELETE /shifts/{id}`)
 
 ```bash
 curl -X 'DELETE' \
@@ -369,6 +441,56 @@ curl -X 'DELETE' \
 ```json
 {
   "detail": "Shift not found"
+}
+```
+
+### 10. Update a Shift (`PUT /shifts/{id}`)
+
+```bash
+curl -X 'PUT' \
+  'http://localhost:8000/shifts/1' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "worker_id": 1,
+    "start_time": "2026-08-11T13:00:00.203Z",
+    "end_time": "2026-08-11T17:18:00.517Z"
+  }'
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "worker_id": 1,
+  "start_time": "2026-08-11T13:00:00.203Z",
+  "end_time": "2026-08-11T17:18:00.517Z",
+  "id": 1,
+  "created_at": "2026-08-11T17:30:00.598Z",
+  "duration_hours": 4.3
+}
+```
+
+**Error (404 Not Found) - Shift doesn't exist:**
+
+```json
+{
+  "detail": "Shift not found"
+}
+```
+
+**Error (404 Not Found) - Worker doesn't exist:**
+
+```json
+{
+  "detail": "Worker not found"
+}
+```
+
+**Error (409 Conflict):**
+
+```json
+{
+  "detail": "Shift conflicts with existing shift(s) for this worker: 2"
 }
 ```
 
