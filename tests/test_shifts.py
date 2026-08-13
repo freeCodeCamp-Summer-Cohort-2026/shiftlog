@@ -50,20 +50,8 @@ def test_delete_shift(client: TestClient, worker_id: int):
 
 # 
 def test_cache_shift(client: TestClient, worker_id: int):
+
     test_create_shift(client, worker_id)
-    # response = client.post(
-    #     "/shifts",
-    #     json={
-    #         "worker_id": worker_id,
-    #         "start_time": "2026-08-10T09:00:00",
-    #         "end_time": "2026-08-10T17:00:00",
-    #     },
-    # )
-    # assert response.status_code == 201
-    # body = response.json()
-    # assert body["worker_id"] == worker_id
-    # assert "id" in body
-    # assert "created_at" in body
 
     first_call = track_get_shift_duration(client, worker_id)
     second_call = track_get_shift_duration(client, worker_id)
