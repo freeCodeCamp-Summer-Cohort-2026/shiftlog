@@ -1,16 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate
+from app.rate_limiter import limiter
 
 router = APIRouter(prefix="/workers", tags=["workers"])
 
 
 @router.post("", response_model=WorkerRead, status_code=201)
-def create_worker(worker: WorkerCreate, session: Session = Depends(get_session)):
+@limiter.limit("10/30seconds")
+def create_worker(
+    request: Request,
+    worker: WorkerCreate,
+    session: Session = Depends(get_session),
+):
     """
-    POST request: 
+    POST request:
     Create a worker with the following information:
     **name**: a string
     **role**: a string
@@ -24,11 +30,18 @@ def create_worker(worker: WorkerCreate, session: Session = Depends(get_session))
     session.refresh(db_worker)
     return db_worker
 
+
 @router.put("/{worker_id}", response_model=WorkerRead)
-def update_worker(worker_id: int, worker: WorkerUpdate, session: Session = Depends(get_session)):
+@limiter.limit("10/30seconds")
+def update_worker(
+    request: Request,
+    worker_id: int,
+    worker: WorkerUpdate,
+    session: Session = Depends(get_session),
+):
     """
     PUT request:
-    Update an existing worker's details by their ID.    
+    Update an existing worker's details by their ID.
     -----------
     - **worker_id**: integer database ID
     - **name**: string
@@ -41,7 +54,7 @@ def update_worker(worker_id: int, worker: WorkerUpdate, session: Session = Depen
     if db_worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
 
-       # Sanitize spaces in name (same as create_worker)
+    # Sanitize spaces in name (same as create_worker)
     worker.name = " ".join(worker.name.split())
 
     # Update worker attributes
@@ -50,7 +63,7 @@ def update_worker(worker_id: int, worker: WorkerUpdate, session: Session = Depen
     session.add(db_worker)
     session.commit()
     session.refresh(db_worker)
-    
+
     return db_worker
 
 
@@ -58,7 +71,7 @@ def update_worker(worker_id: int, worker: WorkerUpdate, session: Session = Depen
 def list_workers(session: Session = Depends(get_session)):
     """
     GET request:
-    Get all workers in the database. 
+    Get all workers in the database.
     ----------
     This queries the database for all workers.
     """
@@ -71,10 +84,10 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
     GET request:
     Get a single worker based on their ID.
     -----------
-    This queries the database for a specific worker ID, the parameter required is the database ID for a single worker. 
+    This queries the database for a specific worker ID, the parameter required is the database ID for a single worker.
     -----------
     Returns name, role and id that was used to query (the parameter)
-    `/workers/1` gets the worker with the ID of `1` 
+    `/workers/1` gets the worker with the ID of `1`
     """
     worker = session.get(Worker, worker_id)
     if worker is None:

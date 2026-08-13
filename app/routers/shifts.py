@@ -1,22 +1,29 @@
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import asc, desc
 from sqlmodel import Session, select
 
+from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 from app.conflicts import find_conflicting_shifts
 from app.database import get_session
 from app.models import Shift, ShiftConflictGroup, ShiftCreate, ShiftRead, ShiftUpdate, Worker
 from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
+from app.rate_limiter import limiter
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
 
 
 @router.post("", response_model=ShiftRead, status_code=201)
-def create_shift(shift: ShiftCreate, session: Session = Depends(get_session)):
+@limiter.limit("10/30seconds")
+def create_shift(
+    request: Request,
+    shift: ShiftCreate,
+    session: Session = Depends(get_session),
+):
     """
-    POST request: 
+    POST request:
     ----------
     - Create a shift for a worker (using the worker ID)
     --
@@ -140,10 +147,10 @@ def list_shifts(
 
     return session.exec(statement).all()
 
+
 @router.get("/upcoming", response_model=list[ShiftRead])
 def list_upcoming_shifts(
-    minutes: int=DEFAULT_LOOKAHEAD_MINUTES,
-    session: Session=Depends(get_session)
+    minutes: int = DEFAULT_LOOKAHEAD_MINUTES, session: Session = Depends(get_session)
 ):
     """Shifts starting within the next `minutes` (defaults to the background
     job's lookahead window)."""
@@ -168,7 +175,11 @@ def list_conflicts(session: Session = Depends(get_session)):
         conflicting = set()
         for shift in shifts:
             conflicts = find_conflicting_shifts(
-                session, worker_id, shift.start_time, shift.end_time, exclude_shift_id=shift.id
+                session,
+                worker_id,
+                shift.start_time,
+                shift.end_time,
+                exclude_shift_id=shift.id,
             )
             if conflicts:
                 conflicting.add(shift.id)
@@ -179,7 +190,9 @@ def list_conflicts(session: Session = Depends(get_session)):
             conflict_groups.append(
                 ShiftConflictGroup(
                     worker_id=worker_id,
-                    conflicting_shifts=[ShiftRead.model_validate(s) for s in conflicting_shifts],
+                    conflicting_shifts=[
+                        ShiftRead.model_validate(s) for s in conflicting_shifts
+                    ],
                 )
             )
     return conflict_groups
@@ -188,9 +201,9 @@ def list_conflicts(session: Session = Depends(get_session)):
 @router.get("/{shift_id}", response_model=ShiftRead)
 def get_shift(shift_id: int, session: Session = Depends(get_session)):
     """
-    GET request: 
+    GET request:
     ---
-    Get a shift record, `{parameter}` required is the shift record ID. 
+    Get a shift record, `{parameter}` required is the shift record ID.
     ---
     Returns:
     - `worker_id`
@@ -205,19 +218,21 @@ def get_shift(shift_id: int, session: Session = Depends(get_session)):
 
 
 @router.delete("/{shift_id}", status_code=204)
-def delete_shift(shift_id: int, session: Session = Depends(get_session)):
+@limiter.limit("10/30seconds")
+def delete_shift(
+    request: Request, shift_id: int, session: Session = Depends(get_session)
+):
     """
     DELETE request:
     ---
-    Delete a shift record. 
+    Delete a shift record.
     ---
-    Required parameter is the shift record `id` 
+    Required parameter is the shift record `id`
     ---
-    If there is no matching ID a "Shift not found" error is thrown. 
+    If there is no matching ID a "Shift not found" error is thrown.
     """
     shift = session.get(Shift, shift_id)
     if shift is None:
         raise HTTPException(status_code=404, detail="Shift not found")
     session.delete(shift)
     session.commit()
-

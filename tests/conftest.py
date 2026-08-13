@@ -13,6 +13,15 @@ from sqlmodel.pool import StaticPool
 
 from app.database import get_session
 from app.main import app
+from app.rate_limiter import limiter
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Keep rate-limit counters isolated between tests."""
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.fixture(name="session")
