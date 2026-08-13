@@ -124,7 +124,6 @@ def test_upcoming_shifts_returns_only_within_window(client: TestClient, worker_i
     assert within_window["id"] in ids
     assert out_of_window["id"] not in ids
 
-
 def test_shift_duration(client: TestClient, worker_id: int):
     create = client.post(
         "/shifts",
@@ -141,3 +140,74 @@ def test_shift_duration(client: TestClient, worker_id: int):
 
     data = get_response.json()
     assert data["duration_hours"] == 8.0
+
+
+def test_update_shift(client: TestClient, worker_id: int):
+    # Create shift
+    create = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    shift_id = create.json()["id"]
+
+    # Update shift
+    update_res = client.put(
+        f"/shifts/{shift_id}",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T10:00:00",
+            "end_time": "2026-08-10T18:00:00",
+        },
+    )
+    assert update_res.status_code == 200
+    body = update_res.json()
+    assert body["start_time"] == "2026-08-10T10:00:00"
+    assert body["end_time"] == "2026-08-10T18:00:00"
+
+
+def test_update_shift_not_found(client: TestClient, worker_id: int):
+    response = client.put(
+        "/shifts/9999",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_update_shift_conflict(client: TestClient, worker_id: int):
+    # Shift 1: 09:00 - 12:00
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T12:00:00",
+        },
+    )
+    # Shift 2: 13:00 - 17:00
+    shift2 = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T13:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    ).json()
+
+    # Try updating shift 2 to overlap with shift 1 (11:00 - 15:00)
+    response = client.put(
+        f"/shifts/{shift2['id']}",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T11:00:00",
+            "end_time": "2026-08-10T15:00:00",
+        },
+    )
+    assert response.status_code == 409

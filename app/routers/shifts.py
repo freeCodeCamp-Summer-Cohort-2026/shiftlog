@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 
 from app.conflicts import find_conflicting_shifts
 from app.database import get_session
-from app.models import Shift, ShiftConflictGroup, ShiftCreate, ShiftRead, Worker
+from app.models import Shift, ShiftConflictGroup, ShiftCreate, ShiftRead, ShiftUpdate, Worker
 from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
@@ -50,6 +50,62 @@ def create_shift(shift: ShiftCreate, session: Session = Depends(get_session)):
     session.refresh(db_shift)
     return db_shift
 
+
+@router.put("/{shift_id}", response_model=ShiftRead)
+def update_shift(
+    shift_id: int,
+    shift_data: ShiftUpdate,
+    session: Session = Depends(get_session)
+):
+    """
+    PUT request:
+    Update an existing shift record by its ID.
+    -----------
+    - **shift_id**: integer ID of the shift to update
+    - **worker_id**: integer ID of the worker assigned
+    - **start_time**: datetime string (ISO format)
+    - **end_time**: datetime string (ISO format)
+    -----------
+    Returns the updated shift object.
+    Throws:
+    - 404 if shift_id is not found
+    - 404 if worker_id is not found
+    - 409 if shift conflicts with an existing shift for the worker
+    """
+    # 1. Fetch existing shift record
+    db_shift = session.get(Shift, shift_id)
+    if db_shift is None:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    # 2. Verify worker exists
+    worker = session.get(Worker, shift_data.worker_id)
+    if worker is None:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    # 3. Check for shift conflicts (excluding the shift currently being updated!)
+    conflicts = find_conflicting_shifts(
+        session,
+        shift_data.worker_id,
+        shift_data.start_time,
+        shift_data.end_time,
+        exclude_shift_id=shift_id
+    )
+    if conflicts:
+        conflict_ids = ", ".join(str(c.id) for c in conflicts)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"
+        )
+
+    # 4. Update attributes
+    db_shift.worker_id = shift_data.worker_id
+    db_shift.start_time = shift_data.start_time
+    db_shift.end_time = shift_data.end_time
+
+    session.add(db_shift)
+    session.commit()
+    session.refresh(db_shift)
+    return db_shift
 
 @router.get("", response_model=list[ShiftRead])
 def list_shifts(

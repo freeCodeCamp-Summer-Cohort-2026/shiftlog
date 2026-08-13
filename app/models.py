@@ -69,3 +69,7 @@ class ShiftRead(ShiftBase):
 class ShiftConflictGroup(SQLModel):
     worker_id: int
     conflicting_shifts: list[ShiftRead]
+
+
+class ShiftUpdate(ShiftBase):
+    pass
