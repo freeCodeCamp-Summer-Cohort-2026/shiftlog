@@ -126,9 +126,10 @@ def list_shifts(
     if filters.end_before is not None:
         statement = statement.where(Shift.start_time <= filters.end_before)
 
+    statement = statement.offset(filters.offset).limit(filters.limit)
+
     column = Shift.end_time if filters.sort_by == "end_time" else Shift.start_time
     statement = statement.order_by(column.desc() if filters.order == "desc" else column.asc())
-    statement = statement.offset(filters.offset).limit(filters.limit)
     return session.exec(statement).all()
 
 

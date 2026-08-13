@@ -67,7 +67,6 @@ def worker_id_fixture(client: TestClient) -> int:
 
 @pytest.fixture(name="three_shifts")
 def fixture_three_shifts(session: Session):
-    print("this id degubng to check if the test fixture run")
     worker = Worker(name="Test Worker", role="Cashier")
     session.add(worker)
     session.commit()
