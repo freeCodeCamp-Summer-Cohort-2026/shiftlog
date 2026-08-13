@@ -8,11 +8,33 @@ def test_create_worker(client: TestClient):
     assert body["name"] == "Jamie Lee"
     assert body["role"] == "Cook"
     assert "id" in body
+def test_update_worker(client: TestClient):
+    create_res = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
+    worker_id = create_res.json()["id"]
+
+    update_res = client.put(f"/workers/{worker_id}", json={"name": "Jamie Lee", "role": "Head Chef"})
+    assert update_res.status_code == 200
+    
+    body = update_res.json()
+    assert body["id"] == worker_id
+    assert body["role"] == "Head Chef"
+
+
+def test_update_worker_not_found(client: TestClient):
+    response = client.put("/workers/9999", json={"name": "Nobody", "role": "Ghost"})
+    assert response.status_code == 404
 
 
 def test_create_worker_requires_name(client: TestClient):
     response = client.post("/workers", json={"name": "", "role": "Cook"})
     assert response.status_code == 422
+
+
+def test_create_worker_sanitizes_name(client: TestClient):
+    response = client.post("/workers", json={"name": "Alice   Rivera", "role": "Cook"})
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "Alice Rivera"
 
 
 def test_list_workers(client: TestClient):
