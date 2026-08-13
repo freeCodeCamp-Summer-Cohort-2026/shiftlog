@@ -4,15 +4,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
 from sqlalchemy import text
 from sqlmodel import Session
 
 from app.background import upcoming_shifts_loop
 from app.database import create_db_and_tables, get_session
+from app.rate_limiter import limiter
 from app.routers import shifts, workers
 
 logging.basicConfig(level=logging.INFO)
@@ -40,8 +40,6 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
 
-
-limiter = Limiter(key_func=get_remote_address, default_limits=["25/30seconds"])
 
 app = FastAPI(
     title="ShiftLog",

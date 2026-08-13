@@ -9,11 +9,13 @@ from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 from app.conflicts import find_conflicting_shifts
 from app.database import get_session
 from app.models import Shift, ShiftConflictGroup, ShiftCreate, ShiftRead, Worker
+from app.rate_limiter import limiter
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
 
 
 @router.post("", response_model=ShiftRead, status_code=201)
+@limiter.limit("10/30seconds")
 def create_shift(shift: ShiftCreate, session: Session = Depends(get_session)):
     """
     POST request:
