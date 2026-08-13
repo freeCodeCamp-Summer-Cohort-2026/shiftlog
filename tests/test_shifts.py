@@ -150,6 +150,7 @@ def test_upcoming_shifts_returns_only_within_window(client: TestClient, worker_i
     assert within_window["id"] in ids
     assert out_of_window["id"] not in ids
 
+
 def test_shift_duration(client: TestClient, worker_id: int):
     create = client.post(
         "/shifts",
@@ -252,6 +253,7 @@ def test_create_shift_with_notes(client: TestClient, worker_id: int):
             "notes": notes,
         },
     )
+
     assert response.status_code == 201
     body = response.json()
     assert body["notes"] == notes
@@ -270,6 +272,7 @@ def test_create_shift_without_notes(client: TestClient, worker_id: int):
             "end_time": "2026-08-10T17:00:00",
         },
     )
+
     assert response.status_code == 201
     assert response.json()["notes"] is None
 
@@ -286,6 +289,7 @@ def test_create_shift_rejects_notes_over_max_length(
             "notes": "x" * 301,
         },
     )
+
     assert response.status_code == 422
 
 
@@ -400,6 +404,8 @@ def test_update_shift_inactive_worker(client: TestClient, worker_id: int):
         == "Cannot schedule a shift for an inactive worker"
     )
 
+def test_shifts_today_excludes_shift_starting_tomorrow(client: TestClient, worker_id: int):
+    tomorrow_8am=datetime.utcnow().replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
 def test_shifts_today_includes_shift_starting_today(
     client: TestClient, worker_id: int
