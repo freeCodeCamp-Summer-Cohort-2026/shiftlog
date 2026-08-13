@@ -77,14 +77,13 @@ docker compose exec api pytest
 
 Note: `shiftlog-api-1` is the name of the container running the Shiftlog API, which you need to confirm.
 
-
 ## API overview
 
 ### General
 
-| Method | Path            | Description                         |
-|--------|-----------------|-------------------------------------|
-| GET    | `/health`       | Check application health            |
+| Method | Path      | Description              |
+| ------ | --------- | ------------------------ |
+| GET    | `/health` | Check application health |
 
 ### Workers
 
@@ -107,7 +106,6 @@ A shift conflicts with another shift for the _same worker_ when their time
 ranges overlap. Back-to-back shifts (one ending exactly when the next
 starts) are not conflicts.
 
-
 ### How conflict detection works
 
 ShiftLog checks for overlap with a standard half-open interval test:
@@ -117,12 +115,14 @@ ShiftLog checks for overlap with a standard half-open interval test:
 If both conditions are true, the shifts overlap and the new shift is rejected with a 409.
 
 **Example — conflict:**
+
 - Existing shift: 9:00 AM – 5:00 PM
 - New shift: 3:00 PM – 11:00 PM
 
 `9:00 < 11:00` ✅ and `5:00 > 3:00` ✅ → both true, so this **conflicts**.
 
 **Example — back-to-back, not a conflict:**
+
 - Existing shift: 9:00 AM – 5:00 PM
 - New shift: 5:00 PM – 11:00 PM
 

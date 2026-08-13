@@ -9,7 +9,7 @@ accepts and returns.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import field_validator
+from pydantic import field_validator, computed_field
 from sqlmodel import Field, SQLModel
 
 
@@ -23,6 +23,9 @@ class Worker(WorkerBase, table=True):
 
 
 class WorkerCreate(WorkerBase):
+    pass
+
+class WorkerUpdate(WorkerBase):
     pass
 
 
@@ -40,9 +43,7 @@ class ShiftBase(SQLModel):
     def end_after_start(cls, end_time: datetime, info):
         start_time = info.data.get("start_time")
         if start_time is not None and end_time <= start_time:
-            # NOTE: this message is intentionally basic - see the "improve
-            # error message for invalid time ranges" issue for follow-up.
-            raise ValueError("end_time must be after start_time")
+            raise ValueError(f"end_time ({end_time.isoformat()}) must be after start_time ({start_time.isoformat()})")
         return end_time
 
 
@@ -58,3 +59,13 @@ class ShiftCreate(ShiftBase):
 class ShiftRead(ShiftBase):
     id: int
     created_at: datetime
+    @computed_field
+    @property
+    def duration_hours(self) -> float:
+        shift_duration = (self.end_time - self.start_time).total_seconds() / 3600
+        return shift_duration
+
+
+class ShiftConflictGroup(SQLModel):
+    worker_id: int
+    conflicting_shifts: list[ShiftRead]
