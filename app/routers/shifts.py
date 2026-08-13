@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi_utilities import ttl_lru_cache
 from pydantic import ValidationError
 from sqlmodel import Session, select
 
@@ -63,6 +64,7 @@ def list_shifts(
     return session.exec(statement).all()
 
 
+@ttl_lru_cache(ttl=2, max_size=128)
 @router.get("/{shift_id}", response_model=ShiftRead)
 def get_shift(shift_id: int, session: Session = Depends(get_session)):
     shift = session.get(Shift, shift_id)
