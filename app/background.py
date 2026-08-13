@@ -7,8 +7,6 @@ own so it can be reused by an HTTP endpoint later (see the "upcoming shifts
 endpoint" issue).
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import os
