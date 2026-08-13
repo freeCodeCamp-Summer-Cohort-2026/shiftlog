@@ -162,7 +162,9 @@ def get_shift(shift_id: int, session: Session = Depends(get_session)):
 
 @router.delete("/{shift_id}", status_code=204)
 @limiter.limit("10/30seconds")
-def delete_shift(shift_id: int, session: Session = Depends(get_session)):
+def delete_shift(
+    request: Request, shift_id: int, session: Session = Depends(get_session)
+):
     """
     DELETE request:
     ---

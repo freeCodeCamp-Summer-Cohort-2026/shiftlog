@@ -34,7 +34,10 @@ def create_worker(
 @router.put("/{worker_id}", response_model=WorkerRead)
 @limiter.limit("10/30seconds")
 def update_worker(
-    worker_id: int, worker: WorkerUpdate, session: Session = Depends(get_session)
+    request: Request,
+    worker_id: int,
+    worker: WorkerUpdate,
+    session: Session = Depends(get_session),
 ):
     """
     PUT request:
