@@ -1,15 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.database import get_session
-<<<<<<< HEAD
-from app.models import Worker, WorkerCreate, WorkerRead
-from app.routers import shifts
-=======
 from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate
->>>>>>> 1d27ad295d179382752fefd0532cd36573a4b00f
+
+from app.routers import shifts
 
 router = APIRouter(prefix="/workers", tags=["workers"])
+client = TestClient
 
 @router.post("", response_model=WorkerRead, status_code=201)
 def create_worker(worker: WorkerCreate, session: Session = Depends(get_session)):
@@ -90,7 +89,11 @@ def delete_worker(worker_id: int, session: Session = Depends(get_session)):
     worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
-    
-    @shifts.router.delete(
+
+    workerShifts = shifts.list_shifts(worker_id, None, None, None, "asc", session)
+
+    for i in range(0,len(workerShifts)):
+        session.delete(workerShifts[i])
+
     session.delete(worker)
     session.commit()
