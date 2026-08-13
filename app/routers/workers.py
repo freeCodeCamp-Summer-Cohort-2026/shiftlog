@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session, select
 
 from app.database import get_session
@@ -10,7 +10,11 @@ router = APIRouter(prefix="/workers", tags=["workers"])
 
 @router.post("", response_model=WorkerRead, status_code=201)
 @limiter.limit("10/30seconds")
-def create_worker(worker: WorkerCreate, session: Session = Depends(get_session)):
+def create_worker(
+    request: Request,
+    worker: WorkerCreate,
+    session: Session = Depends(get_session),
+):
     """
     POST request:
     Create a worker with the following information:

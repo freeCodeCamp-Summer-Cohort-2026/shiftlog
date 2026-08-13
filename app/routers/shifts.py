@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import asc, desc
 from sqlmodel import Session, select
 
@@ -16,7 +16,11 @@ router = APIRouter(prefix="/shifts", tags=["shifts"])
 
 @router.post("", response_model=ShiftRead, status_code=201)
 @limiter.limit("10/30seconds")
-def create_shift(shift: ShiftCreate, session: Session = Depends(get_session)):
+def create_shift(
+    request: Request,
+    shift: ShiftCreate,
+    session: Session = Depends(get_session),
+):
     """
     POST request:
     ----------
