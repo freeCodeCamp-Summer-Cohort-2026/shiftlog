@@ -50,3 +50,21 @@ def test_list_workers(client: TestClient):
 def test_get_worker_not_found(client: TestClient):
     response = client.get("/workers/999")
     assert response.status_code == 404
+
+
+def test_get_worker_with_matching_role(client: TestClient):
+    client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
+    client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
+
+    response = client.get("/workers?role=Cashier")
+    names = {w["name"] for w in response.json()}
+    assert names == {"Sam Osei"}
+
+
+def test_get_worker_with_no_matching_role(client: TestClient):
+    client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
+    client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
+    
+    response = client.get("/workers?role=Owner")
+    names = {w["name"] for w in response.json()}
+    assert names == set()
