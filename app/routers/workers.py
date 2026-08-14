@@ -1,13 +1,3 @@
-<<<<<<< HEAD
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
-
-from sqlmodel import Session, select
-
-from app.database import get_session
-from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate, WorkerSummary, Shift
-from app.rate_limiter import limiter
-=======
->>>>>>> 15c4c473c1e143329b310bb6f5df00e1b437b276
 from datetime import datetime
 from typing import Optional
 
@@ -152,15 +142,6 @@ def get_worker_hours_summary(
 
     shifts = session.exec(statement).all()
 
-<<<<<<< HEAD
-    return WorkerSummary(
-        worker_id=worker_id,
-        total_hours=total_hours,
-        shift_count=len(shifts)
-    )
-
-=======
     total_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
 
-    return WorkerSummary(worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts))
->>>>>>> 15c4c473c1e143329b310bb6f5df00e1b437b276
+    return WorkerSummary(worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts)
