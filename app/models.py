@@ -69,3 +69,8 @@ class ShiftRead(ShiftBase):
 class ShiftConflictGroup(SQLModel):
     worker_id: int
     conflicting_shifts: list[ShiftRead]
+
+class WorkerSummary(SQLModel):
+    worker_id: int
+    total_hours: float
+    shift_count: int
