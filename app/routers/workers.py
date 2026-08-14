@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session, select
 
 from app.database import get_session
-from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate
+from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate, WorkerSummary, Shift
 from app.rate_limiter import limiter
+from datetime import datetime
+from typing import Optional
 
 router = APIRouter(prefix="/workers", tags=["workers"])
 
@@ -93,3 +95,33 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
     return worker
+
+
+@router.get("/{worker_id}/summary", response_model=WorkerSummary)
+def get_worker_hours_summary(worker_id: int,
+start: Optional[datetime] = None,
+end: Optional[datetime] = None,
+session: Session = Depends(get_session)):
+    worker=session.get(Worker, worker_id)
+    if worker is None:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    statement = select(Shift).where(Shift.worker_id==worker_id)
+    if start is not None:
+        statement = statement.where(Shift.start_time >= start)
+    if end is not None:
+        statement = statement.where(Shift.start_time <= end)
+    
+    shifts=session.exec(statement).all()
+
+    total_hours=sum(
+        (shift.end_time-shift.start_time).total_seconds()/3600
+        for shift in shifts
+    )
+
+    return WorkerSummary(
+        worker_id=worker_id,
+        total_hours=total_hours,
+        shift_count=len(shifts)
+    )
+    
