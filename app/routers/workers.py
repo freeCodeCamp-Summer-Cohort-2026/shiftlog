@@ -110,9 +110,10 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
 
 @router.get("/{worker_id}/summary", response_model=WorkerSummary)
 def get_worker_hours_summary(worker_id: int,
-start: Optional[datetime] = None,
-end: Optional[datetime] = None,
-session: Session = Depends(get_session)):
+                            start: Optional[datetime] = None,
+                            end: Optional[datetime] = None,
+                            session: Session = Depends(get_session)
+):
     worker=session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -135,4 +136,3 @@ session: Session = Depends(get_session)):
         total_hours=total_hours,
         shift_count=len(shifts)
     )
-    
