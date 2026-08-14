@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate, WorkerSummary, Shift
 from app.rate_limiter import limiter
 from datetime import datetime
+from typing import Optional
+
 from typing import Optional
 
 router = APIRouter(prefix="/workers", tags=["workers"])
@@ -70,14 +72,23 @@ def update_worker(
 
 
 @router.get("", response_model=list[WorkerRead])
-def list_workers(session: Session = Depends(get_session)):
+def list_workers(session: Session = Depends(get_session), role: Optional[str] = Query(
+        default=None,
+        description="Filter workers by their job role",
+        examples=["Cashier", "Cook"]
+    )):
     """
     GET request:
-    Get all workers in the database.
+    Get all workers in the database with optional role filtering.
     ----------
-    This queries the database for all workers.
+    This queries the database for all workers with optional role filtering.
     """
-    return session.exec(select(Worker)).all()
+    statement = select(Worker)
+
+    if role is not None:
+        statement = statement.where(Worker.role == role)
+    
+    return session.exec(statement).all()
 
 
 @router.get("/{worker_id}", response_model=WorkerRead)
