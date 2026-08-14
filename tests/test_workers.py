@@ -8,13 +8,15 @@ def test_create_worker(client: TestClient):
     assert body["name"] == "Jamie Lee"
     assert body["role"] == "Cook"
     assert "id" in body
+
+
 def test_update_worker(client: TestClient):
     create_res = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     worker_id = create_res.json()["id"]
 
     update_res = client.put(f"/workers/{worker_id}", json={"name": "Jamie Lee", "role": "Head Chef"})
     assert update_res.status_code == 200
-    
+
     body = update_res.json()
     assert body["id"] == worker_id
     assert body["role"] == "Head Chef"
@@ -64,20 +66,22 @@ def test_get_worker_with_matching_role(client: TestClient):
 def test_get_worker_with_no_matching_role(client: TestClient):
     client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
-    
+
     response = client.get("/workers?role=Owner")
     names = {w["name"] for w in response.json()}
     assert names == set()
+
 
 def test_worker_summary_unknown_worker(client: TestClient):
     response = client.get("/workers/9999/summary")
     assert response.status_code == 404
 
+
 def test_worker_summary_zero_shifts(client: TestClient):
-    '''
+    """
     Create a new worker and immediately call the summary endpoint
     since a fresh worker has no shifts
-    '''
+    """
     create_res = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     assert create_res.status_code == 201
     worker_id = create_res.json()["id"]
@@ -85,8 +89,8 @@ def test_worker_summary_zero_shifts(client: TestClient):
     response = client.get(f"/workers/{worker_id}/summary")
     assert response.status_code == 200
 
-    assert response.json()["shift_count"]==0
-    assert response.json()["total_hours"]==0
+    assert response.json()["shift_count"] == 0
+    assert response.json()["total_hours"] == 0
 
 
 def test_worker_summary_within_range(client: TestClient):
@@ -106,7 +110,6 @@ def test_worker_summary_within_range(client: TestClient):
     )
     assert response_within.status_code == 201
 
-
     # Create a shift outside the range for this worker:
     response_out = client.post(
         "/shifts",
@@ -119,14 +122,16 @@ def test_worker_summary_within_range(client: TestClient):
     assert response_out.status_code == 201
 
     # Call the summary endpoint for both:
-    response_summary_within = client.get(f"/workers/{worker_id}/summary?start=2026-08-01T00:00:00&end=2026-08-31T00:00:00")
+    response_summary_within = client.get(
+        f"/workers/{worker_id}/summary?start=2026-08-01T00:00:00&end=2026-08-31T00:00:00"
+    )
     assert response_summary_within.status_code == 200
 
-    assert response_summary_within.json()["shift_count"]==1
-    assert response_summary_within.json()["total_hours"]==8 # between 17:00 and 9:00
+    assert response_summary_within.json()["shift_count"] == 1
+    assert response_summary_within.json()["total_hours"] == 8  # between 17:00 and 9:00
 
     response_summary_out = client.get(f"/workers/{worker_id}/summary?start=2026-09-09T09:00:00&end=2026-09-09T17:00:00")
     assert response_summary_out.status_code == 200
 
-    assert response_summary_out.json()["shift_count"]==0
-    assert response_summary_out.json()["total_hours"]==0
+    assert response_summary_out.json()["shift_count"] == 0
+    assert response_summary_out.json()["total_hours"] == 0
