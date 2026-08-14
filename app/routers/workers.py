@@ -144,4 +144,4 @@ def get_worker_hours_summary(
 
     total_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
 
-    return WorkerSummary(worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts)
+    return WorkerSummary(worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts))
