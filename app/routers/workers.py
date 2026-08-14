@@ -5,6 +5,8 @@ from app.database import get_session
 from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate
 from app.rate_limiter import limiter
 
+from typing import Optional
+
 router = APIRouter(prefix="/workers", tags=["workers"])
 
 
@@ -68,14 +70,19 @@ def update_worker(
 
 
 @router.get("", response_model=list[WorkerRead])
-def list_workers(session: Session = Depends(get_session)):
+def list_workers(session: Session = Depends(get_session), role: Optional[str] = None):
     """
     GET request:
     Get all workers in the database.
     ----------
     This queries the database for all workers.
     """
-    return session.exec(select(Worker)).all()
+    statement = select(Worker)
+
+    if role is not None:
+        statement = statement.where(Worker.role == role)
+    
+    return session.exec(statement).all()
 
 
 @router.get("/{worker_id}", response_model=WorkerRead)
