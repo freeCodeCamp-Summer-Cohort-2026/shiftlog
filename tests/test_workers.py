@@ -20,7 +20,6 @@ def test_update_worker(client: TestClient):
     assert body["id"] == worker_id
     assert body["role"] == "Head Chef"
 
-
 def test_update_worker_not_found(client: TestClient):
     response = client.put("/workers/9999", json={"name": "Nobody", "role": "Ghost"})
     assert response.status_code == 404
@@ -167,8 +166,3 @@ def test_worker_delete(client: TestClient):
 
     get_shift_response = client.get(f"/shifts/{shiftId}")
     assert get_shift_response.status_code == 404
-
-=======
-    assert response_summary_out.json()["shift_count"] == 0
-    assert response_summary_out.json()["total_hours"] == 0
->>>>>>> 15c4c473c1e143329b310bb6f5df00e1b437b276
