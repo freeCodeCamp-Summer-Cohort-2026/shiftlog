@@ -31,10 +31,14 @@ def get_upcoming_shifts(
     """Return shifts starting between `now` and `now + lookahead_minutes`."""
     now = now or datetime.utcnow()
     horizon = now + timedelta(minutes=lookahead_minutes)
-    statement = select(Shift).where(
-        Shift.start_time >= now,
-        Shift.start_time <= horizon,
-    ).order_by(Shift.start_time)
+    statement = (
+        select(Shift)
+        .where(
+            Shift.start_time >= now,
+            Shift.start_time <= horizon,
+        )
+        .order_by(Shift.start_time)
+    )
     return list(session.exec(statement).all())
 
 

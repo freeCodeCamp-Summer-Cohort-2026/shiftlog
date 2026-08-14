@@ -37,17 +37,12 @@ def create_shift(
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
 
-    conflicts = find_conflicting_shifts(
-        session, shift.worker_id, shift.start_time, shift.end_time
-    )
+    conflicts = find_conflicting_shifts(session, shift.worker_id, shift.start_time, shift.end_time)
     if conflicts:
         conflict_ids = ", ".join(str(c.id) for c in conflicts)
         raise HTTPException(
             status_code=409,
-            detail=(
-                f"Shift conflicts with existing shift(s) for this worker: "
-                f"{conflict_ids}"
-            ),
+            detail=(f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"),
         )
 
     db_shift = Shift.model_validate(shift)
@@ -84,17 +79,13 @@ def list_shifts(
         "end_time": Shift.end_time,
         "created_at": Shift.created_at,
     }[sort_by or "start_time"]
-    statement = statement.order_by(
-        asc(sort_column) if order == "asc" else desc(sort_column)
-    )
+    statement = statement.order_by(asc(sort_column) if order == "asc" else desc(sort_column))
 
     return session.exec(statement).all()
 
 
 @router.get("/upcoming", response_model=list[ShiftRead])
-def list_upcoming_shifts(
-    minutes: int = DEFAULT_LOOKAHEAD_MINUTES, session: Session = Depends(get_session)
-):
+def list_upcoming_shifts(minutes: int = DEFAULT_LOOKAHEAD_MINUTES, session: Session = Depends(get_session)):
     """Shifts starting within the next `minutes` (defaults to the background
     job's lookahead window)."""
     return get_upcoming_shifts(session, minutes)
@@ -133,9 +124,7 @@ def list_conflicts(session: Session = Depends(get_session)):
             conflict_groups.append(
                 ShiftConflictGroup(
                     worker_id=worker_id,
-                    conflicting_shifts=[
-                        ShiftRead.model_validate(s) for s in conflicting_shifts
-                    ],
+                    conflicting_shifts=[ShiftRead.model_validate(s) for s in conflicting_shifts],
                 )
             )
     return conflict_groups
@@ -162,9 +151,7 @@ def get_shift(shift_id: int, session: Session = Depends(get_session)):
 
 @router.delete("/{shift_id}", status_code=204)
 @limiter.limit("10/30seconds")
-def delete_shift(
-    request: Request, shift_id: int, session: Session = Depends(get_session)
-):
+def delete_shift(request: Request, shift_id: int, session: Session = Depends(get_session)):
     """
     DELETE request:
     ---

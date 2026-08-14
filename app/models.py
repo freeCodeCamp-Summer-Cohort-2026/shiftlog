@@ -9,7 +9,7 @@ accepts and returns.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import field_validator, computed_field
+from pydantic import computed_field, field_validator
 from sqlmodel import Field, SQLModel
 
 
@@ -24,6 +24,7 @@ class Worker(WorkerBase, table=True):
 
 class WorkerCreate(WorkerBase):
     pass
+
 
 class WorkerUpdate(WorkerBase):
     pass
@@ -59,6 +60,7 @@ class ShiftCreate(ShiftBase):
 class ShiftRead(ShiftBase):
     id: int
     created_at: datetime
+
     @computed_field
     @property
     def duration_hours(self) -> float:
@@ -69,6 +71,7 @@ class ShiftRead(ShiftBase):
 class ShiftConflictGroup(SQLModel):
     worker_id: int
     conflicting_shifts: list[ShiftRead]
+
 
 class WorkerSummary(SQLModel):
     worker_id: int

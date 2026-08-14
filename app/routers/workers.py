@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 
 from sqlmodel import Session, select
@@ -5,9 +6,17 @@ from sqlmodel import Session, select
 from app.database import get_session
 from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate, WorkerSummary, Shift
 from app.rate_limiter import limiter
+=======
+>>>>>>> 15c4c473c1e143329b310bb6f5df00e1b437b276
 from datetime import datetime
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlmodel import Session, select
+
+from app.database import get_session
+from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate
+from app.rate_limiter import limiter
 
 from app.routers import shifts
 
@@ -73,11 +82,12 @@ def update_worker(
 
 
 @router.get("", response_model=list[WorkerRead])
-def list_workers(session: Session = Depends(get_session), role: Optional[str] = Query(
-        default=None,
-        description="Filter workers by their job role",
-        examples=["Cashier", "Cook"]
-    )):
+def list_workers(
+    session: Session = Depends(get_session),
+    role: Optional[str] = Query(
+        default=None, description="Filter workers by their job role", examples=["Cashier", "Cook"]
+    ),
+):
     """
     GET request:
     Get all workers in the database with optional role filtering.
@@ -88,7 +98,7 @@ def list_workers(session: Session = Depends(get_session), role: Optional[str] = 
 
     if role is not None:
         statement = statement.where(Worker.role == role)
-    
+
     return session.exec(statement).all()
 
 
@@ -130,26 +140,27 @@ def get_worker_hours_summary(
     end: Optional[datetime] = None,
     session: Session = Depends(get_session),
 ):
-    worker=session.get(Worker, worker_id)
+    worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
 
-    statement = select(Shift).where(Shift.worker_id==worker_id)
+    statement = select(Shift).where(Shift.worker_id == worker_id)
     if start is not None:
         statement = statement.where(Shift.start_time >= start)
     if end is not None:
         statement = statement.where(Shift.start_time <= end)
-    
-    shifts=session.exec(statement).all()
 
-    total_hours=sum(
-        (shift.end_time-shift.start_time).total_seconds()/3600
-        for shift in shifts
-    )
+    shifts = session.exec(statement).all()
 
+<<<<<<< HEAD
     return WorkerSummary(
         worker_id=worker_id,
         total_hours=total_hours,
         shift_count=len(shifts)
     )
 
+=======
+    total_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
+
+    return WorkerSummary(worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts))
+>>>>>>> 15c4c473c1e143329b310bb6f5df00e1b437b276
