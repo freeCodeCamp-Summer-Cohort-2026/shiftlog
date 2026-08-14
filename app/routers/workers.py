@@ -7,7 +7,6 @@ from app.rate_limiter import limiter
 from datetime import datetime
 from typing import Optional
 
-from typing import Optional
 
 router = APIRouter(prefix="/workers", tags=["workers"])
 
@@ -109,10 +108,11 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
 
 
 @router.get("/{worker_id}/summary", response_model=WorkerSummary)
-def get_worker_hours_summary(worker_id: int,
-                            start: Optional[datetime] = None,
-                            end: Optional[datetime] = None,
-                            session: Session = Depends(get_session)
+def get_worker_hours_summary(
+    worker_id: int,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    session: Session = Depends(get_session),
 ):
     worker=session.get(Worker, worker_id)
     if worker is None:
