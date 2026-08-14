@@ -9,10 +9,6 @@ def test_create_worker(client: TestClient):
     assert body["role"] == "Cook"
     assert "id" in body
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 15c4c473c1e143329b310bb6f5df00e1b437b276
 def test_update_worker(client: TestClient):
     create_res = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     worker_id = create_res.json()["id"]
@@ -136,7 +132,6 @@ def test_worker_summary_within_range(client: TestClient):
     response_summary_out = client.get(f"/workers/{worker_id}/summary?start=2026-09-09T09:00:00&end=2026-09-09T17:00:00")
     assert response_summary_out.status_code == 200
 
-<<<<<<< HEAD
     assert response_summary_out.json()["shift_count"]==0
     assert response_summary_out.json()["total_hours"]==0
 
