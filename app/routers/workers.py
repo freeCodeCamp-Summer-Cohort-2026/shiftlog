@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlmodel import Session, select
+from sqlmodel import Session, select, col
 
 from app.database import get_session
 from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate
@@ -77,17 +77,24 @@ def update_worker(
 
 @router.get("", response_model=list[WorkerRead])
 def list_workers(
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_session), 
     role: Optional[str] = Query(
-        default=None, description="Filter workers by their job role", examples=["Cashier", "Cook"]
+        default=None,
+        description="Filter workers by their job role",
+        examples=["Cashier", "Cook"]
     ),
+    name: Optional[str] = Query(
+		default=None,
+		description="Filter workers by name (case-insensitive)",
+		examples=["Carmen Diaz", "carmen"]
+		),
     include_inactive: bool = Query(default=False)
-):
+    ):
     """
     GET request:
-    Get all active workers in the database with optional role filtering.
+    Get all active workers in the database with optional role and/or name filtering.
     ----------
-    This queries the database for all active workers with optional role filtering.
+    This queries the database for all active workers with optional role and/or name filtering.
     """
     statement = select(Worker)
 
@@ -97,6 +104,10 @@ def list_workers(
     if role is not None:
         statement = statement.where(Worker.role == role)
 
+    if name is not None:
+        # used icontains() for case-insensitivity; added col from SQLmodel to avoid IDE type error
+        statement = statement.where(col(Worker.name).icontains(name))
+        
     return session.exec(statement).all()
 
 
