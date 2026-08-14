@@ -70,12 +70,16 @@ def update_worker(
 
 
 @router.get("", response_model=list[WorkerRead])
-def list_workers(session: Session = Depends(get_session), role: Optional[str] = None):
+def list_workers(session: Session = Depends(get_session), role: Optional[str] = Query(
+        default=None,
+        description="Filter workers by their job role",
+        examples=["Cashier", "Cook"]
+    )):
     """
     GET request:
-    Get all workers in the database.
+    Get all workers in the database with optional role filtering.
     ----------
-    This queries the database for all workers.
+    This queries the database for all workers with optional role filtering.
     """
     statement = select(Worker)
 
