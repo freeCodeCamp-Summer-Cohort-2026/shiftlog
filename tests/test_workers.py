@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-
+from tests import test_shifts
 
 def test_create_worker(client: TestClient):
     response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
@@ -8,6 +8,7 @@ def test_create_worker(client: TestClient):
     assert body["name"] == "Jamie Lee"
     assert body["role"] == "Cook"
     assert "id" in body
+
 def test_update_worker(client: TestClient):
     create_res = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     worker_id = create_res.json()["id"]
@@ -130,3 +131,37 @@ def test_worker_summary_within_range(client: TestClient):
 
     assert response_summary_out.json()["shift_count"]==0
     assert response_summary_out.json()["total_hours"]==0
+
+def test_worker_delete(client: TestClient):
+    post_worker_response = client.post("/workers", json={"name": "Jamie Lee", "role":"Cook"})
+    assert post_worker_response.status_code == 201
+    worker_body = post_worker_response.json()
+    assert worker_body["name"] == "Jamie Lee"
+    assert worker_body["role"] == "Cook"
+    assert "id" in worker_body
+    workerId = worker_body["id"]
+
+    post_shift_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": workerId,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    assert post_shift_response.status_code == 201
+    shift_body = post_shift_response.json()
+    assert shift_body["worker_id"] == workerId
+    assert "id" in shift_body
+    assert "created_at" in shift_body
+    shiftId = shift_body["id"]
+
+    delete_worker_response = client.delete(f"/workers/{workerId}")
+    assert delete_worker_response.status_code == 204
+
+    get_worker_response = client.get(f"/workers/{workerId}")
+    assert get_worker_response.status_code == 404
+
+    get_shift_response = client.get(f"/shifts/{shiftId}")
+    assert get_shift_response.status_code == 404
+

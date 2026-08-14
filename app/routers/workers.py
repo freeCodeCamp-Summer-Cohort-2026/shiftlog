@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 
 from sqlmodel import Session, select
@@ -13,7 +12,6 @@ from typing import Optional
 from app.routers import shifts
 
 router = APIRouter(prefix="/workers", tags=["workers"])
-client = TestClient
 
 @router.post("", response_model=WorkerRead, status_code=201)
 @limiter.limit("10/30seconds")
