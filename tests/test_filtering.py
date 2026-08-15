@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from fastapi.testclient import TestClient
 
 
@@ -82,3 +84,54 @@ def test_list_shifts_rejects_invalid_order(client: TestClient):
     assert detail[0]["loc"] == ["query", "order"]
     assert "asc" in detail[0]["msg"]
     assert "desc" in detail[0]["msg"]
+
+
+def test_list_upcoming_shifts_unfiltered(client: TestClient):
+    # Create a shift starting in 10 minutes and one starting in 8 hours for 3 different workers
+    for i in range(3):
+        worker = client.post("/workers", json={"name": f"Worker {i}", "role": "Role"}).json()
+        _create_shift(
+            client,
+            worker["id"],
+            (datetime.utcnow() + timedelta(minutes=10)).isoformat(),
+            (datetime.utcnow() + timedelta(hours=6, minutes=10)).isoformat(),
+        )
+        _create_shift(
+            client,
+            worker["id"],
+            (datetime.utcnow() + timedelta(hours=8)).isoformat(),
+            (datetime.utcnow() + timedelta(hours=14)).isoformat(),
+        )
+
+    response = client.get("/shifts/upcoming", params={"minutes": 15})
+    assert response.status_code == 200
+    shifts = response.json()
+    assert len(shifts) == 3  # Only the shifts starting in 10 minutes
+
+
+def test_list_upcoming_shifts_filtered_by_worker(client: TestClient, worker_id: int):
+    # create a shift starting in 10 minutes, and a shift starting in 8 hours for 3 different workers
+    target_worker_id = None
+    for i in range(3):
+        worker = client.post("/workers", json={"name": f"Worker {i}", "role": "Role"}).json()
+        if i == 1:
+            target_worker_id = worker["id"]
+        _create_shift(
+            client,
+            worker["id"],
+            (datetime.utcnow() + timedelta(minutes=10)).isoformat(),
+            (datetime.utcnow() + timedelta(hours=6, minutes=10)).isoformat(),
+        )
+        _create_shift(
+            client,
+            worker["id"],
+            (datetime.utcnow() + timedelta(hours=8)).isoformat(),
+            (datetime.utcnow() + timedelta(hours=14)).isoformat(),
+        )
+
+    response = client.get("/shifts/upcoming", params={"minutes": 15, "worker_id": target_worker_id})
+    assert response.status_code == 200
+    shifts = response.json()
+    assert len(shifts) == 1  # Only the shifts starting in 10 minutes for the specified worker
+    for shift in shifts:
+        assert shift["worker_id"] == target_worker_id

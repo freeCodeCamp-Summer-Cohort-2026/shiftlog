@@ -2,12 +2,11 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.database import get_session
-from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate
+from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate, OrgHoursSummary
 from app.rate_limiter import limiter
-
 from app.routers import shifts
 
 router = APIRouter(prefix="/workers", tags=["workers"])
@@ -77,17 +76,24 @@ def update_worker(
 
 @router.get("", response_model=list[WorkerRead])
 def list_workers(
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_session), 
     role: Optional[str] = Query(
-        default=None, description="Filter workers by their job role", examples=["Cashier", "Cook"]
+        default=None,
+        description="Filter workers by their job role",
+        examples=["Cashier", "Cook"]
     ),
+    name: Optional[str] = Query(
+		default=None,
+		description="Filter workers by name (case-insensitive)",
+		examples=["Carmen Diaz", "carmen"]
+		),
     include_inactive: bool = Query(default=False)
-):
+    ):
     """
     GET request:
-    Get all active workers in the database with optional role filtering.
+    Get all active workers in the database with optional role and/or name filtering.
     ----------
-    This queries the database for all active workers with optional role filtering.
+    This queries the database for all active workers with optional role and/or name filtering.
     """
     statement = select(Worker)
 
@@ -97,7 +103,60 @@ def list_workers(
     if role is not None:
         statement = statement.where(Worker.role == role)
 
+    if name is not None:
+        # used icontains() for case-insensitivity; added col from SQLmodel to avoid type warning in IDE
+        statement = statement.where(col(Worker.name).icontains(name))
+        
     return session.exec(statement).all()
+
+
+@router.get("/summary", response_model=OrgHoursSummary)
+def get_workers_hours_summary(
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    session: Session = Depends(get_session),
+):
+    """
+    GET request:
+    Get a summary of total hours worked and shift count for all workers within an optional date range.
+    ----------
+    This queries the database for all workers and their shifts, calculating total hours worked and shift count.
+    """
+    statement = select(Worker)
+    workers = session.exec(statement).all()
+
+    summaries = []
+    grand_total_hours = 0.0
+    total_shift_count = 0
+
+    for worker in workers:
+        shift_statement = select(Shift).where(Shift.worker_id == worker.id)
+        if start is not None:
+            shift_statement = shift_statement.where(Shift.start_time >= start)
+        if end is not None:
+            shift_statement = shift_statement.where(Shift.start_time <= end)
+
+        shifts = session.exec(shift_statement).all()
+        total_shift_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
+        total_hours = round(total_shift_hours, 2)  # Round to 2 decimal places for better readability
+        average_shift_hours = total_shift_hours / len(shifts) if len(shifts) != 0 else 0.0
+        grand_total_hours += total_hours
+        total_shift_count += len(shifts)
+    
+        summaries.append(
+            WorkerSummary(
+                worker_id=worker.id,
+                total_hours=total_shift_hours,
+                shift_count=len(shifts),
+                average_shift_hours=round(average_shift_hours, 2)
+            )
+        )
+
+    return OrgHoursSummary(
+        workers=summaries,
+        grand_total_hours=round(grand_total_hours, 2),
+        total_shift_count=total_shift_count
+    )
 
 
 @router.get("/{worker_id}", response_model=WorkerRead)
@@ -117,16 +176,23 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
     return worker
 
 @router.delete("/{worker_id}", status_code=204)
-def delete_worker(worker_id: int, session: Session = Depends(get_session)):
+@limiter.limit("10/30seconds")
+def delete_worker(request: Request, worker_id: int, session: Session = Depends(get_session)):
     worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
 
     workerShifts = shifts.list_shifts(worker_id, None, None, None, "asc", session)
 
-    for i in range(0,len(workerShifts)):
-        session.delete(workerShifts[i])
-
+    confirmDelete = request.headers.get("Confirm-Delete")
+    
+    if workerShifts:
+        if confirmDelete and (confirmDelete.lower() == "true"):
+            for i in range(0,len(workerShifts)):
+                session.delete(workerShifts[i])
+        else:
+            raise HTTPException(status_code=409, detail=f"Worker has {len(workerShifts)} shifts. To delete the worker and their shifts, resend the request with the header Confirm-Delete: true")
+            
     session.delete(worker)
     session.commit()
 
@@ -151,5 +217,12 @@ def get_worker_hours_summary(
     shifts = session.exec(statement).all()
 
     total_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
+    average_shift_hours = total_hours / len(shifts) if len(shifts) != 0 else 0.0
 
-    return WorkerSummary(worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts))
+    return WorkerSummary(
+        worker_id=worker_id, 
+        total_hours=total_hours, 
+        shift_count=len(shifts),
+        average_shift_hours=round(average_shift_hours, 2)
+        )
+

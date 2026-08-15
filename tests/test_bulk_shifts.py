@@ -6,7 +6,7 @@ def test_bulk_create_all_valid(client: TestClient, worker_id: int):
         "/shifts/bulk",
         json=[
             {"worker_id": worker_id, "start_time": "2026-08-10T09:00:00", "end_time": "2026-08-10T12:00:00"},
-          {"worker_id": worker_id, "start_time": "2026-08-10T13:00:00", "end_time": "2026-08-10T17:00:00"},
+            {"worker_id": worker_id, "start_time": "2026-08-10T13:00:00", "end_time": "2026-08-10T17:00:00"},
         ],
     )
     assert response.status_code == 201
@@ -68,4 +68,6 @@ def test_bulk_create_conflicts_within_batch(client: TestClient, worker_id: int):
     body = response.json()
     assert len(body["accepted_shifts"]) == 1
     assert len(body["rejected_shifts"]) == 1
+    assert body["accepted_shifts"][0]["start_time"].startswith("2026-08-10T09:00:00")
+    assert body["rejected_shifts"][0]["shift"]["start_time"].startswith("2026-08-10T11:00:00")
     assert "conflict" in body["rejected_shifts"][0]["reason"].lower()
