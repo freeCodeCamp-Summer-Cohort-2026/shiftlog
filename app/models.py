@@ -80,7 +80,10 @@ class Shift(ShiftBase, table=True):
 
 
 class ShiftCreate(ShiftBase):
-    pass
+    period: Optional[str] = None,
+    duration: Optional[str] = None,
+    repeat: Optional[int] = None,
+    end_date: Optional[datetime] = None
 
 
 class ShiftRead(ShiftBase):

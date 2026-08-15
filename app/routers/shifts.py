@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, UTC
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import asc, desc
@@ -19,6 +19,7 @@ from app.models import (
     Worker,
 )
 from app.rate_limiter import limiter
+from app.recurrence import recurrence_maker
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
 
@@ -29,6 +30,10 @@ def create_shift(
     request: Request,
     shift: ShiftCreate,
     session: Session = Depends(get_session),
+    period: Optional[str] = None,
+    duration: Optional[str] = None,
+    repeat: Optional[int] = None,
+    end_date: Optional[datetime] = None
 ):
     """
     POST request:
@@ -40,6 +45,17 @@ def create_shift(
     - **End time**
     - **Worker ID**
     ---
+    Optional Fields (for recurring shifts)
+    - **Period**: [ "daily", "weekly", "5days", "biweekly", "monthly", "quarterly", "yearly"]
+    - **Duration**": ["day", "week", "month", "year"]
+    - **Repeat**: int
+    - **End Date**: datetime
+
+    - Period if None, defaults to daily, if Duration or Repeat or End Date are set;
+    - If none of these, then is single shift (original behavior)
+    - If Period is set but no limit, an error should be returned
+    - Duration, Repeat, End Date if all set, limit is the first reached
+
     - If a worker ID does not exist, an error will be thrown.
     """
     worker = session.get(Worker, shift.worker_id)
@@ -59,10 +75,18 @@ def create_shift(
             detail=(f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"),
         )
 
-    db_shift = Shift.model_validate(shift)
-    session.add(db_shift)
-    session.commit()
-    session.refresh(db_shift)
+    # Recurrence validation and generation
+    all_shifts: list[ShiftCreate] = []
+    all_shifts.append(shift)
+    recurrent_shifts = recurrence_maker(shift, session, period, duration, repeat, end_date)
+    if recurrent_shifts is not None:
+        all_shifts.extend(recurrent_shifts)
+    db_shift = Shift.model_validate(shift)  # It is repeated to avoid code smell
+    for rshift in all_shifts:
+        db_shift = Shift.model_validate(rshift)
+        session.add(db_shift)
+        session.commit()
+        session.refresh(db_shift)
     return db_shift
 
 
