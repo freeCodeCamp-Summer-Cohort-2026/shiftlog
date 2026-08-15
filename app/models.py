@@ -16,6 +16,7 @@ from sqlmodel import Field, SQLModel
 class WorkerBase(SQLModel):
     name: str = Field(min_length=1, max_length=100)
     role: str = Field(min_length=1, max_length=50)
+    active: bool = Field(default=True, description="Indicates whether the worker is active or not")
 
 
 class Worker(WorkerBase, table=True):

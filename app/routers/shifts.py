@@ -36,6 +36,11 @@ def create_shift(
     worker = session.get(Worker, shift.worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
+    if not worker.active:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot schedule a shift for an inactive worker",
+        )
 
     conflicts = find_conflicting_shifts(session, shift.worker_id, shift.start_time, shift.end_time)
     if conflicts:
@@ -73,6 +78,9 @@ def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get
         worker = session.get(Worker, shift.worker_id)
         if worker is None:
             rejected_shifts.append(RejectedShift(shift=shift, reason=f"Worker {shift.worker_id} not found"))
+            continue
+        elif worker.active is False:
+            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Worker {shift.worker_id} is not active"))
             continue
 
         conflicts = find_conflicting_shifts(
