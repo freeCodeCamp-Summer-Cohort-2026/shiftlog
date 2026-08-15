@@ -141,3 +141,56 @@ def test_shift_duration(client: TestClient, worker_id: int):
 
     data = get_response.json()
     assert data["duration_hours"] == 8.0
+
+
+def test_create_shift_with_notes(client: TestClient, worker_id: int):
+    notes = "Covering for Alex"
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+            "notes": notes,
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["notes"] == notes
+
+    get_response = client.get(f"/shifts/{body['id']}")
+    assert get_response.status_code == 200
+    assert get_response.json()["notes"] == notes
+
+
+def test_create_shift_without_notes(
+    client: TestClient, worker_id: int
+):
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["notes"] is None
+
+
+def test_create_shift_rejects_notes_over_max_length(
+    client: TestClient, worker_id: int
+):
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+            "notes": "x" * 301,
+        },
+    )
+
+    assert response.status_code == 422
