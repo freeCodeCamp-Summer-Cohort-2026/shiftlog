@@ -105,7 +105,7 @@ def list_workers(
         statement = statement.where(Worker.role == role)
 
     if name is not None:
-        # used icontains() for case-insensitivity; added col from SQLmodel to avoid IDE type error
+        # used icontains() for case-insensitivity; added col from SQLmodel to avoid type warning in IDE
         statement = statement.where(col(Worker.name).icontains(name))
         
     return session.exec(statement).all()
