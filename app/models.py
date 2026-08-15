@@ -77,3 +77,13 @@ class WorkerSummary(SQLModel):
     worker_id: int
     total_hours: float
     shift_count: int
+
+
+class RejectedShift(SQLModel):
+    shift: ShiftCreate
+    reason: str
+
+
+class BulkShiftResponse(SQLModel):
+    accepted_shifts: list[ShiftRead]
+    rejected_shifts: list[RejectedShift]

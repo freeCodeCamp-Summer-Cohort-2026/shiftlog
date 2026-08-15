@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 from app.conflicts import find_conflicting_shifts
 from app.database import get_session
-from app.models import Shift, ShiftConflictGroup, ShiftCreate, ShiftRead, Worker
+from app.models import Shift, ShiftConflictGroup, ShiftCreate, ShiftRead, Worker, RejectedShift, BulkShiftResponse
 from app.rate_limiter import limiter
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
@@ -50,6 +50,52 @@ def create_shift(
     session.commit()
     session.refresh(db_shift)
     return db_shift
+
+
+@router.post("/bulk", response_model=BulkShiftResponse, status_code=201)
+def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get_session)):
+    """
+    POST request:
+    ---
+    Create multiple shifts for workers in bulk.
+    ---
+    Fields:
+    - **Start time**
+    - **End time**
+    - **Worker ID**
+    ---
+    If any worker ID does not exist, an error will be thrown.
+    If any shift conflicts with existing shifts for the same worker, an error will be thrown.
+    """
+    db_shifts = []
+    rejected_shifts = []
+    for shift in shifts:
+        worker = session.get(Worker, shift.worker_id)
+        if worker is None:
+            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Worker {shift.worker_id} not found"))
+            continue
+
+        conflicts = find_conflicting_shifts(
+            session, shift.worker_id, shift.start_time, shift.end_time
+        )
+        if conflicts:
+            conflict_ids = ", ".join(str(c.id) for c in conflicts)
+            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}")
+            )
+            continue
+
+        db_shift = Shift.model_validate(shift)
+        session.add(db_shift)
+        session.flush()  # Ensure the shift gets an ID before committing
+        db_shifts.append(db_shift)
+
+    session.commit()
+    for db_shift in db_shifts:
+        session.refresh(db_shift)
+    return BulkShiftResponse(
+        accepted_shifts=[ShiftRead.model_validate(s) for s in db_shifts],
+        rejected_shifts=rejected_shifts
+    )
 
 
 @router.get("", response_model=list[ShiftRead])
