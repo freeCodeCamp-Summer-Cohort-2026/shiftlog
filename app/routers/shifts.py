@@ -131,10 +131,14 @@ def list_shifts(
 
 
 @router.get("/upcoming", response_model=list[ShiftRead])
-def list_upcoming_shifts(minutes: int = DEFAULT_LOOKAHEAD_MINUTES, session: Session = Depends(get_session)):
+def list_upcoming_shifts(
+        minutes: int = DEFAULT_LOOKAHEAD_MINUTES,
+        worker_id: int | None = None,
+        session: Session = Depends(get_session)
+):
     """Shifts starting within the next `minutes` (defaults to the background
     job's lookahead window)."""
-    return get_upcoming_shifts(session, minutes)
+    return get_upcoming_shifts(session=session, worker_id=worker_id, lookahead_minutes=minutes)
 
 
 @router.get("/conflicts", response_model=list[ShiftConflictGroup])
