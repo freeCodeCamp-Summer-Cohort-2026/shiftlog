@@ -334,3 +334,4 @@ def delete_shift(request: Request, shift_id: int, session: Session = Depends(get
         raise HTTPException(status_code=404, detail="Shift not found")
     session.delete(shift)
     session.commit()
+
