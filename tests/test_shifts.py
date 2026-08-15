@@ -98,6 +98,28 @@ def test_delete_nonexistent_shift(client: TestClient, worker_id: int):
     assert get_response.status_code == 200
 
 
+def test_schedule_shift_for_inactive_worker_is_rejected(client: TestClient):
+    worker = client.post(
+        "/workers", json={"name": "Former Worker", "role": "Cook"}
+    ).json()
+    client.put(
+        f"/workers/{worker['id']}",
+        json={"name": worker["name"], "role": worker["role"], "active": False},
+    )
+
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker["id"],
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Cannot schedule a shift for an inactive worker"
+
+
 def test_upcoming_shifts_returns_only_within_window(client: TestClient, worker_id: int):
     now = datetime.utcnow()
 

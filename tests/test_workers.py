@@ -166,3 +166,36 @@ def test_worker_delete(client: TestClient):
 
     get_shift_response = client.get(f"/shifts/{shiftId}")
     assert get_shift_response.status_code == 404
+
+
+def test_deactivate_worker(client: TestClient):
+    worker = client.post(
+        "/workers", json={"name": "Jamie Lee", "role": "Cook"}
+    ).json()
+
+    response = client.put(
+        f"/workers/{worker['id']}",
+        json={"name": worker["name"], "role": worker["role"], "active": False},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["active"] is False
+
+
+def test_inactive_worker_excluded_from_default_list(client: TestClient):
+    inactive_worker = client.post(
+        "/workers", json={"name": "Jamie Lee", "role": "Cook"}
+    ).json()
+    client.put(
+        f"/workers/{inactive_worker['id']}",
+        json={
+            "name": inactive_worker["name"],
+            "role": inactive_worker["role"],
+            "active": False,
+        },
+    )
+
+    response = client.get("/workers")
+
+    assert response.status_code == 200
+    assert inactive_worker["id"] not in {worker["id"] for worker in response.json()}
