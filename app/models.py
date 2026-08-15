@@ -37,6 +37,7 @@ class ShiftBase(SQLModel):
     worker_id: int = Field(foreign_key="worker.id", index=True)
     start_time: datetime
     end_time: datetime
+    notes: Optional[str] = Field(default=None, max_length=300)
 
     @field_validator("end_time")
     @classmethod
