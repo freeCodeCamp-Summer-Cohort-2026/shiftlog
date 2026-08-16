@@ -53,8 +53,9 @@ class ShiftBase(SQLModel):
     @classmethod
     def end_start_delta(cls, end_time:datetime.datetime, info):
         start_time = info.data.get("start_time")
-        if start_time is not None and ((end_time - start_time) > datetime.timedelta(hours=24)):
-            raise ValueError(f"The maximum length of a shift can only be 24 hours.")
+        if start_time is not None and (((end_time - start_time) > datetime.timedelta(hours=24))or
+                                       ((end_time - start_time) < datetime.timedelta(minutes=30))):
+            raise ValueError(f"A shift must last at least 30 minutes and no more than 24 hours.")
         return end_time
 
 class Shift(ShiftBase, table=True):

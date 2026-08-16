@@ -228,7 +228,18 @@ def test_reject_long_shift(client: TestClient, worker_id: int):
     assert boundary_response.status_code == 201
 
     over_response = client.post("/shifts", json = {"worker_id": worker_id,
-                                              "start_time":"2026-08-16T06:00:00",
-                                              "end_time":"2026-08-17T06:00:01"})
+                                              "start_time":"2026-08-17T06:00:00",
+                                              "end_time":"2026-08-18T06:00:01"})
     assert over_response.status_code == 422
-                    
+
+def test_reject_short_shift(client: TestClient, worker_id: int):
+    boundary_response = client.post("/shifts", json = {"worker_id": worker_id,
+                                              "start_time":"2026-08-16T06:00:00",
+                                              "end_time":"2026-08-16T06:30:00"})
+    assert boundary_response.status_code == 201
+
+    under_response = client.post("/shifts", json = {"worker_id": worker_id,
+                                              "start_time":"2026-08-17T06:00:00",
+                                              "end_time":"2026-08-17T06:29:00"})
+    assert under_response.status_code == 422
+
