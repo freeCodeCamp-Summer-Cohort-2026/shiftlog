@@ -6,7 +6,7 @@ are the DB models, and the *Create/*Read classes are what the API actually
 accepts and returns.
 """
 
-from datetime import datetime
+import datetime
 from typing import Optional
 
 from pydantic import computed_field, field_validator
@@ -37,22 +37,29 @@ class WorkerRead(WorkerBase):
 
 class ShiftBase(SQLModel):
     worker_id: int = Field(foreign_key="worker.id", index=True)
-    start_time: datetime
-    end_time: datetime
+    start_time: datetime.datetime
+    end_time: datetime.datetime
     notes: Optional[str] = Field(default=None, max_length=300)
 
     @field_validator("end_time")
     @classmethod
-    def end_after_start(cls, end_time: datetime, info):
+    def end_after_start(cls, end_time: datetime.datetime, info):
         start_time = info.data.get("start_time")
         if start_time is not None and end_time <= start_time:
             raise ValueError(f"end_time ({end_time.isoformat()}) must be after start_time ({start_time.isoformat()})")
         return end_time
 
+    @field_validator("end_time")
+    @classmethod
+    def end_start_delta(cls, end_time:datetime.datetime, info):
+        start_time = info.data.get("start_time")
+        if start_time is not None and ((end_time - start_time) > datetime.timedelta(hours=24)):
+            raise ValueError(f"The maximum length of a shift can only be 24 hours.")
+        return end_time
 
 class Shift(ShiftBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
 
 class ShiftCreate(ShiftBase):
@@ -61,7 +68,7 @@ class ShiftCreate(ShiftBase):
 
 class ShiftRead(ShiftBase):
     id: int
-    created_at: datetime
+    created_at: datetime.datetime
 
     @computed_field
     @property
