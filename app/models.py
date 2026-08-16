@@ -83,7 +83,7 @@ class ShiftCreate(ShiftBase):
     period: Optional[str]  = Field(default=None, max_length=20)
     duration: Optional[str] = Field(default=None, max_length=20)
     repeat: Optional[int] = Field(default=None)
-    end_date: Optional[datetime] = Field(default=None)
+    end_date: Optional[datetime.datetime] = Field(default=None)
 
 
 class ShiftRead(ShiftBase):

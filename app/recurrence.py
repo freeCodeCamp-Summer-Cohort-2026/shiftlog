@@ -49,6 +49,9 @@ def recurrence_maker(
             new_end_time = (shift.end_time + timedelta(weeks=8))  # .isoformat()
             new_shift = ShiftCreate(worker_id=shift.worker_id, start_time=new_start_time, end_time=new_end_time)
 
+    if new_shift is None:
+        print(f"DEBUG: recurrence_maker no recurrence asked for shift={shift}")
+        return None
     conflicts = find_conflicting_shifts(session, new_shift.worker_id, new_shift.start_time, new_shift.end_time)
     print(f"DEBUG: recurrence_maker conflicts={conflicts}")
     print(f"DEBUG: recurrence_maker return new shift:"
