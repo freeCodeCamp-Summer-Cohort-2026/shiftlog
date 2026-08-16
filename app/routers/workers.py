@@ -1,12 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlmodel import Session, select
+from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlmodel import Session, select, col
 
 from app.database import get_session
-from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate
+from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate
 from app.rate_limiter import limiter
 
-router = APIRouter(prefix="/workers", tags=["workers"])
+from app.routers import shifts
 
+router = APIRouter(prefix="/workers", tags=["workers"])
 
 @router.post("", response_model=WorkerRead, status_code=201)
 @limiter.limit("10/30seconds")
@@ -46,6 +50,9 @@ def update_worker(
     - **worker_id**: integer database ID
     - **name**: string
     - **role**: string
+    - **active**: bool
+    - Set **active** to `false` to deactivate the worker or `true` to reactivate them.
+    - Because this is a PUT request, **name**, **role**, and **active** are required.
     -----------
     Returns the updated worker object.
     Throws a 404 error if worker is not found.
@@ -60,6 +67,7 @@ def update_worker(
     # Update worker attributes
     db_worker.name = worker.name
     db_worker.role = worker.role
+    db_worker.active = worker.active
     session.add(db_worker)
     session.commit()
     session.refresh(db_worker)
@@ -68,14 +76,39 @@ def update_worker(
 
 
 @router.get("", response_model=list[WorkerRead])
-def list_workers(session: Session = Depends(get_session)):
+def list_workers(
+    session: Session = Depends(get_session), 
+    role: Optional[str] = Query(
+        default=None,
+        description="Filter workers by their job role",
+        examples=["Cashier", "Cook"]
+    ),
+    name: Optional[str] = Query(
+		default=None,
+		description="Filter workers by name (case-insensitive)",
+		examples=["Carmen Diaz", "carmen"]
+		),
+    include_inactive: bool = Query(default=False)
+    ):
     """
     GET request:
-    Get all workers in the database.
+    Get all active workers in the database with optional role and/or name filtering.
     ----------
-    This queries the database for all workers.
+    This queries the database for all active workers with optional role and/or name filtering.
     """
-    return session.exec(select(Worker)).all()
+    statement = select(Worker)
+
+    if include_inactive is False:
+        statement = statement.where(Worker.active == True)
+
+    if role is not None:
+        statement = statement.where(Worker.role == role)
+
+    if name is not None:
+        # used icontains() for case-insensitivity; added col from SQLmodel to avoid type warning in IDE
+        statement = statement.where(col(Worker.name).icontains(name))
+        
+    return session.exec(statement).all()
 
 
 @router.get("/{worker_id}", response_model=WorkerRead)
@@ -93,3 +126,41 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
     return worker
+
+@router.delete("/{worker_id}", status_code=204)
+def delete_worker(worker_id: int, session: Session = Depends(get_session)):
+    worker = session.get(Worker, worker_id)
+    if worker is None:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    workerShifts = shifts.list_shifts(worker_id, None, None, None, "asc", session)
+
+    for i in range(0,len(workerShifts)):
+        session.delete(workerShifts[i])
+
+    session.delete(worker)
+    session.commit()
+
+
+@router.get("/{worker_id}/summary", response_model=WorkerSummary)
+def get_worker_hours_summary(
+    worker_id: int,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    session: Session = Depends(get_session),
+):
+    worker = session.get(Worker, worker_id)
+    if worker is None:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    statement = select(Shift).where(Shift.worker_id == worker_id)
+    if start is not None:
+        statement = statement.where(Shift.start_time >= start)
+    if end is not None:
+        statement = statement.where(Shift.start_time <= end)
+
+    shifts = session.exec(statement).all()
+
+    total_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
+
+    return WorkerSummary(worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts))

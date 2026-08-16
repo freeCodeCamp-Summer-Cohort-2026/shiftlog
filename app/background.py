@@ -25,16 +25,32 @@ DEFAULT_LOOKAHEAD_MINUTES = int(os.getenv("UPCOMING_SHIFT_LOOKAHEAD_MINUTES", "3
 
 def get_upcoming_shifts(
     session: Session,
+    worker_id: int | None = None,
     lookahead_minutes: int = DEFAULT_LOOKAHEAD_MINUTES,
     now: datetime | None = None,
 ) -> list[Shift]:
     """Return shifts starting between `now` and `now + lookahead_minutes`."""
     now = now or datetime.utcnow()
     horizon = now + timedelta(minutes=lookahead_minutes)
-    statement = select(Shift).where(
-        Shift.start_time >= now,
-        Shift.start_time <= horizon,
-    ).order_by(Shift.start_time)
+    if worker_id is not None:
+        statement = (
+            select(Shift)
+            .where(
+                Shift.worker_id == worker_id,
+                Shift.start_time >= now,
+                Shift.start_time <= horizon,
+            )
+            .order_by(Shift.start_time)
+        )
+    else:
+        statement = (
+                select(Shift)
+                .where(
+                    Shift.start_time >= now,
+                    Shift.start_time <= horizon,
+                )
+                .order_by(Shift.start_time)
+            )
     return list(session.exec(statement).all())
 
 
@@ -55,7 +71,7 @@ async def upcoming_shifts_loop(
     while True:
         try:
             with Session(engine) as session:
-                for shift in get_upcoming_shifts(session, lookahead_minutes):
+                for shift in get_upcoming_shifts(session=session, lookahead_minutes=lookahead_minutes):
                     logger.info(
                         "Shift #%s for worker %s starts soon at %s",
                         shift.id,
