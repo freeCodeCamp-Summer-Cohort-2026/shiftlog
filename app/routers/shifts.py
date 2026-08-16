@@ -75,7 +75,7 @@ def create_shift(
             detail=(f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"),
         )
 
-    print(f"DEBUG: create_shift input {shift.period=}, {shift.duration=}, {shift.repeat=}, {shift.end_date=})")
+    print(f"DEBUG: create_shift input {shift.worker_id=}, {shift.period=}, {shift.duration=}, {shift.repeat=}, {shift.end_date=})")
     # Recurrence validation and generation
     all_shifts: list[ShiftCreate] = []
     all_shifts.append(shift)

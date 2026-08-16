@@ -40,13 +40,14 @@ def recurrence_maker(
             detail=f"Period is {period}, but is missing duration, repeat or end date.")
 
     # DEBUG initial content matching test
+    print(f"DEBUG: recurrence_maker after validation  {shift.worker_id=}, {period=}, {duration=}, {repeat=}, {end_date=})")
     shifts_list: list[ShiftCreate] = []
-    new_shift: ShiftCreate = ShiftCreate()
-    if period == 'week':
+    new_shift: ShiftCreate | None = None
+    if period in ['week', 'weekly']:
         if duration == '2 months':
             new_start_time = (shift.start_time + timedelta(weeks=8))  # .isoformat()
             new_end_time = (shift.end_time + timedelta(weeks=8))  # .isoformat()
-            new_shift = ShiftCreate(shift.worker_id, new_start_time, new_end_time)
+            new_shift = ShiftCreate(worker_id=shift.worker_id, start_time=new_start_time, end_time=new_end_time)
 
     conflicts = find_conflicting_shifts(session, new_shift.worker_id, new_shift.start_time, new_shift.end_time)
     print(f"DEBUG: recurrence_maker conflicts={conflicts}")
