@@ -1,7 +1,8 @@
 from datetime import datetime
 import io
-from typing import Literal
 
+from typing import ClassVar, Literal
+import csv
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import asc, desc
 from sqlmodel import Session, select
@@ -148,6 +149,43 @@ def list_upcoming_shifts(
     """Shifts starting within the next `minutes` (defaults to the background
     job's lookahead window)."""
     return get_upcoming_shifts(session=session, worker_id=worker_id, lookahead_minutes=minutes)
+
+
+@router.get("/export", status_code=200)
+def shift_export_svc(start: datetime, end: datetime, session: Session = Depends(get_session)):
+    statement = select(Shift)
+    statement = statement.where(Shift.start_time >= start, Shift.end_time <= end)
+    data = session.exec(statement).all()
+    fieldnames = [
+        "id",
+        "worker_id",
+        "start_time",
+        "end_time",
+        "created_at",
+        "duration_hours",
+    ]
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+
+    for shift in data:
+        writer.writerow(
+            {
+                "id": shift.id,
+                "worker_id": shift.worker_id,
+                "start_time": shift.start_time,
+                "created_at": shift.created_at,
+                "end_time": shift.end_time,
+            }
+        )
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="shifts.csv"'},
+    )
 
 
 @router.get("/conflicts", response_model=list[ShiftConflictGroup])
