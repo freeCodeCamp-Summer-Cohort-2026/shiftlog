@@ -37,3 +37,6 @@ uvloop==0.22.1
 watchfiles==1.2.0
 websockets==17.0.1
 wrapt==2.3.0
+bcrypt==4.0.1
+passlib==1.7.4
+PyJWT==2.13.0

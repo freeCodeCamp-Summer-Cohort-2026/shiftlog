@@ -14,6 +14,7 @@ from app.background import upcoming_shifts_loop
 from app.database import create_db_and_tables, get_session
 from app.rate_limiter import limiter
 from app.routers import shifts, workers
+from app.routers import auth
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("shiftlog.main")
@@ -54,6 +55,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # ty
 app.add_middleware(SlowAPIMiddleware)
 app.include_router(workers.router)
 app.include_router(shifts.router)
+app.include_router(auth.router)
 
 
 @app.get("/")
