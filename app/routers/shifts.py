@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import asc, desc
 from sqlmodel import Session, select
 
+from app.auth import require_auth
 from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 from app.conflicts import find_conflicting_shifts
 from app.database import get_session
@@ -18,7 +19,6 @@ from app.models import (
     Worker,
 )
 from app.rate_limiter import limiter
-from app.auth import require_auth
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
 
@@ -29,11 +29,16 @@ def create_shift(
     request: Request,
     shift: ShiftCreate,
     session: Session = Depends(get_session),
-    current_worker: Worker = Depends(require_auth)
+    current_worker: Worker = Depends(require_auth),
 ):
     worker = session.get(Worker, shift.worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
+    if not worker.active:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot schedule a shift for an inactive worker",
+        )
 
     conflicts = find_conflicting_shifts(session, shift.worker_id, shift.start_time, shift.end_time)
     if conflicts:
@@ -54,7 +59,7 @@ def create_shift(
 def create_shifts_bulk(
     shifts: list[ShiftCreate],
     session: Session = Depends(get_session),
-    current_worker: Worker = Depends(require_auth)
+    current_worker: Worker = Depends(require_auth),
 ):
     db_shifts: list[Shift] = []
     rejected_shifts: list[RejectedShift] = []
@@ -66,12 +71,17 @@ def create_shifts_bulk(
                 RejectedShift(shift=shift, reason=f"Worker {shift.worker_id} not found")
             )
             continue
+        elif worker.active is False:
+            rejected_shifts.append(
+                RejectedShift(shift=shift, reason=f"Worker {shift.worker_id} is not active")
+            )
+            continue
 
         # Check against persisted DB shifts
         conflicts = find_conflicting_shifts(
             session, shift.worker_id, shift.start_time, shift.end_time
         )
-        
+
         # Check against shifts accepted earlier in this exact bulk batch
         intra_batch_conflict = any(
             accepted.worker_id == shift.worker_id
@@ -130,9 +140,12 @@ def list_shifts(
 @router.get("/upcoming", response_model=list[ShiftRead])
 def list_upcoming_shifts(
     minutes: int = DEFAULT_LOOKAHEAD_MINUTES,
+    worker_id: Optional[int] = None,
     session: Session = Depends(get_session),
 ):
-    return get_upcoming_shifts(session, minutes)
+    """Shifts starting within the next `minutes` (defaults to the background
+    job's lookahead window)."""
+    return get_upcoming_shifts(session=session, worker_id=worker_id, lookahead_minutes=minutes)
 
 
 @router.get("/conflicts", response_model=list[ShiftConflictGroup])
@@ -151,7 +164,6 @@ def list_conflicts(session: Session = Depends(get_session)):
         for i in range(n):
             for j in range(i + 1, n):
                 s1, s2 = shifts[i], shifts[j]
-                # Overlap condition: max(start1, start2) < min(end1, end2)
                 if max(s1.start_time, s2.start_time) < min(s1.end_time, s2.end_time):
                     conflicting_ids.add(s1.id)
                     conflicting_ids.add(s2.id)
@@ -182,10 +194,11 @@ def delete_shift(
     request: Request,
     shift_id: int,
     session: Session = Depends(get_session),
-    current_worker: Worker = Depends(require_auth)
+    current_worker: Worker = Depends(require_auth),
 ):
     shift = session.get(Shift, shift_id)
     if shift is None:
         raise HTTPException(status_code=404, detail="Shift not found")
     session.delete(shift)
     session.commit()
+    

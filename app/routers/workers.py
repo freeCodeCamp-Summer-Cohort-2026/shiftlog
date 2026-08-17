@@ -2,12 +2,12 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
+from app.auth import require_auth
 from app.database import get_session
 from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate
 from app.rate_limiter import limiter
-from app.auth import require_auth
 
 router = APIRouter(prefix="/workers", tags=["workers"])
 
@@ -18,7 +18,7 @@ def create_worker(
     request: Request,
     worker: WorkerCreate,
     session: Session = Depends(get_session),
-    current_worker: Worker = Depends(require_auth)
+    current_worker: Worker = Depends(require_auth),
 ):
     worker.name = " ".join(worker.name.split())
     db_worker = Worker.model_validate(worker)
@@ -35,8 +35,22 @@ def update_worker(
     worker_id: int,
     worker: WorkerUpdate,
     session: Session = Depends(get_session),
-    current_worker: Worker = Depends(require_auth)
+    current_worker: Worker = Depends(require_auth),
 ):
+    """
+    PUT request:
+    Update an existing worker's details by their ID.
+    -----------
+    - **worker_id**: integer database ID
+    - **name**: string
+    - **role**: string
+    - **active**: bool
+    - Set **active** to `false` to deactivate the worker or `true` to reactivate them.
+    - Because this is a PUT request, **name**, **role**, and **active** are required.
+    -----------
+    Returns the updated worker object.
+    Throws a 404 error if worker is not found.
+    """
     db_worker = session.get(Worker, worker_id)
     if db_worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -44,7 +58,8 @@ def update_worker(
     worker.name = " ".join(worker.name.split())
     db_worker.name = worker.name
     db_worker.role = worker.role
-    
+    db_worker.active = worker.active
+
     session.add(db_worker)
     session.commit()
     session.refresh(db_worker)
@@ -55,12 +70,34 @@ def update_worker(
 def list_workers(
     session: Session = Depends(get_session),
     role: Optional[str] = Query(
-        default=None, description="Filter workers by their job role", examples=["Cashier", "Cook"]
+        default=None,
+        description="Filter workers by their job role",
+        examples=["Cashier", "Cook"],
     ),
+    name: Optional[str] = Query(
+        default=None,
+        description="Filter workers by name (case-insensitive)",
+        examples=["Carmen Diaz", "carmen"],
+    ),
+    include_inactive: bool = Query(default=False),
 ):
+    """
+    GET request:
+    Get all active workers in the database with optional role and/or name filtering.
+    ----------
+    This queries the database for all active workers with optional role and/or name filtering.
+    """
     statement = select(Worker)
+
+    if include_inactive is False:
+        statement = statement.where(Worker.active == True)
+
     if role is not None:
         statement = statement.where(Worker.role == role)
+
+    if name is not None:
+        statement = statement.where(col(Worker.name).icontains(name))
+
     return session.exec(statement).all()
 
 
@@ -73,7 +110,11 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
 
 
 @router.delete("/{worker_id}", status_code=204)
-def delete_worker(worker_id: int, session: Session = Depends(get_session),current_worker: Worker = Depends(require_auth)):
+def delete_worker(
+    worker_id: int,
+    session: Session = Depends(get_session),
+    current_worker: Worker = Depends(require_auth),
+):
     worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -109,4 +150,4 @@ def get_worker_hours_summary(
     total_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
 
     return WorkerSummary(worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts))
-
+  
