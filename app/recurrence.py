@@ -52,21 +52,32 @@ def recurrence_maker(
             detail=(f"Cannot schedule recurrent shift with period {period},"
                     f" and duration {duration}.")
         )
+    print(f"DEBUG: recurrence_maker parsed {period=} ({days=}, {weeks=})  "
+          f" {duration=} ({r_days=}, {r_weeks=}).")
     # DEBUG initial content matching test
-    if period in ['week', 'weekly']:
-        if duration == '2 months':
-            new_start_time = (shift.start_time + timedelta(weeks=8))  # .isoformat()
-            new_end_time = (shift.end_time + timedelta(weeks=8))  # .isoformat()
-            new_shift = ShiftCreate(worker_id=shift.worker_id, start_time=new_start_time, end_time=new_end_time)
+    # if period in ['week', 'weekly']:
+    #     if duration == '2 months':
+    # TODO: We need to solve number of days and weeks for limit date and increment
+    start_time = shift.start_time
+    end_time = shift.end_time
+    limit_date = start_time + timedelta(weeks=r_days*r_weeks)
+    new_start_time = start_time
+    new_end_time = end_time
+    while new_start_time < limit_date:
+        new_start_time = new_start_time + timedelta(days=days, weeks=weeks)
+        new_end_time = new_end_time + timedelta(days=days, weeks=weeks)
+        new_shift = ShiftCreate(worker_id=shift.worker_id, start_time=new_start_time, end_time=new_end_time)
 
-    if new_shift is None:
-        print(f"DEBUG: recurrence_maker no recurrence asked for shift={shift}")
-        return None
-    conflicts = find_conflicting_shifts(session, new_shift.worker_id, new_shift.start_time, new_shift.end_time)
-    print(f"DEBUG: recurrence_maker conflicts={conflicts}")
-    print(f"DEBUG: recurrence_maker return new shift:"
-          f" {new_shift.worker_id}, {new_shift.start_time}, {new_shift.end_time}")
-    shifts_list.append(new_shift)
+        if new_shift is None:
+            print(f"DEBUG: recurrence_maker no recurrence asked for shift={shift}")
+            return None
+        conflicts = find_conflicting_shifts(session, new_shift.worker_id, new_shift.start_time, new_shift.end_time)
+        print(f"DEBUG: recurrence_maker conflicts={conflicts}")
+        print(f"DEBUG: recurrence_maker return new shift:"
+              f" {new_shift.worker_id}, {new_shift.start_time}, {new_shift.end_time}")
+        # Don't add the shift if conflicted
+        if len(conflicts) == 0:
+            shifts_list.append(new_shift)
 
     return shifts_list
 
@@ -98,7 +109,6 @@ def parse(time_block: str):
     VALID_TBLOCKS = ["daily", "weekly", "5days", "biweekly", "monthly", "quarterly", "yearly",
                      "day", "days", "week", "weeks", "month", "months", "quarter", "quarters",
                      "year", "years"]
-    nday = nweek = 0
     in_block = time_block.strip().split(' ')
     if len(in_block) > 1:
         day = in_block[0]
