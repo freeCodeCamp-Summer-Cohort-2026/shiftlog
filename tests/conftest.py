@@ -1,4 +1,5 @@
 import os
+os.environ["JWT_SECRET"] = "ci-local-test-secret-key-that-is-at-least-32-bytes-long!"
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import SQLModel, Session, create_engine
