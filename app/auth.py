@@ -73,3 +73,4 @@ def require_auth(
             detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+        
