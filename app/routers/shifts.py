@@ -1,13 +1,12 @@
 from datetime import datetime
 import io
 
-from typing import ClassVar, Literal
+from typing import Literal
 import csv
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import asc, desc
 from sqlmodel import Session, select
 from fastapi.responses import StreamingResponse
-import csv
 
 from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 from app.conflicts import find_conflicting_shifts
@@ -156,6 +155,8 @@ def shift_export_svc(start: datetime, end: datetime, session: Session = Depends(
     statement = select(Shift)
     statement = statement.where(Shift.start_time >= start, Shift.end_time <= end)
     data = session.exec(statement).all()
+
+    print(data)
     fieldnames = [
         "id",
         "worker_id",
@@ -168,8 +169,8 @@ def shift_export_svc(start: datetime, end: datetime, session: Session = Depends(
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
-
     for shift in data:
+        duration_hours = round((shift.end_time - shift.start_time).total_seconds() / 3600, 2)
         writer.writerow(
             {
                 "id": shift.id,
@@ -177,6 +178,7 @@ def shift_export_svc(start: datetime, end: datetime, session: Session = Depends(
                 "start_time": shift.start_time,
                 "created_at": shift.created_at,
                 "end_time": shift.end_time,
+                "duration_hours": duration_hours,
             }
         )
 
@@ -225,43 +227,6 @@ def list_conflicts(session: Session = Depends(get_session)):
                 )
             )
     return conflict_groups
-
-
-@router.get("/export", status_code=200)
-def shift_export_svc(start: datetime, end: datetime, session: Session = Depends(get_session)):
-    statement = select(Shift)
-    statement = statement.where(Shift.start_time >= start, Shift.end_time <= end)
-    data = session.exec(statement).all()
-    fieldnames = [
-        "id",
-        "worker_id",
-        "start_time",
-        "end_time",
-        "created_at",
-        "duration_hours",
-    ]
-
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
-    writer.writeheader()
-
-    for shift in data:
-        writer.writerow(
-            {
-                "id": shift.id,
-                "worker_id": shift.worker_id,
-                "start_time": shift.start_time,
-                "created_at": shift.created_at,
-                "end_time": shift.end_time,
-            }
-        )
-
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="shifts.csv"'},
-    )
 
 
 @router.get("/{shift_id}", response_model=ShiftRead)
