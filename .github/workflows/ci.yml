@@ -18,3 +18,5 @@ jobs:
           cache: "pip"
       - run: pip install -r requirements.txt
       - run: pytest
+        env:
+          JWT_SECRET: "ci-test-secret-key-that-is-at-least-32-bytes-long!"
