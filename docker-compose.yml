@@ -30,3 +30,4 @@ services:
 
 volumes:
   shiftlog_pgdata:
+  
