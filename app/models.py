@@ -7,7 +7,7 @@ accepts and returns.
 """
 
 import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import computed_field, field_validator
 from sqlmodel import Field, SQLModel
@@ -51,12 +51,15 @@ class ShiftBase(SQLModel):
 
     @field_validator("end_time")
     @classmethod
-    def end_start_delta(cls, end_time:datetime.datetime, info):
+    def end_start_delta(cls, end_time: datetime.datetime, info):
         start_time = info.data.get("start_time")
-        if start_time is not None and (((end_time - start_time) > datetime.timedelta(hours=24))or
-                                       ((end_time - start_time) < datetime.timedelta(minutes=30))):
+        if start_time is not None and (
+            ((end_time - start_time) > datetime.timedelta(hours=24))
+            or ((end_time - start_time) < datetime.timedelta(minutes=30))
+        ):
             raise ValueError(f"A shift must last at least 30 minutes and no more than 24 hours.")
         return end_time
+
 
 class Shift(ShiftBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -97,3 +100,13 @@ class RejectedShift(SQLModel):
 class BulkShiftResponse(SQLModel):
     accepted_shifts: list[ShiftRead]
     rejected_shifts: list[RejectedShift]
+
+
+class FilterParams(SQLModel):
+    limit: int = Field(100, gt=0, le=100)
+    offset: int = Field(0, ge=0)
+    worker_id: Optional[int] = Field(None)
+    start_after: Optional[datetime.datetime] = Field(None)
+    end_before: Optional[datetime.datetime] = Field(None)
+    sort_by: Literal["start_time", "end_time", "created_at"] = Field("start_time")
+    order: Literal["asc", "desc"] = Field("asc")
