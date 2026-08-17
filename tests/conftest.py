@@ -70,3 +70,4 @@ def worker_id_fixture(client: TestClient) -> int:
         json={"name": "Default Test Worker", "role": "Cook"},
     )
     return res.json()["id"]
+    
