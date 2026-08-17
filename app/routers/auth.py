@@ -93,3 +93,4 @@ def login(data: LoginRequest,session: Session = Depends(get_session)):
         "token": token,
         "worker": WorkerRead.model_validate(worker)
     }
+    
