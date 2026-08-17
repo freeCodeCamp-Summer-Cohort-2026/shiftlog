@@ -72,11 +72,13 @@ def create_shift(
         conflict_ids = ", ".join(str(c.id) for c in conflicts)
         raise HTTPException(
             status_code=409,
-            detail=(f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"),
+            detail=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"
         )
 
     print(f"DEBUG: create_shift input {shift.worker_id=}, {shift.period=}, {shift.duration=}, {shift.repeat=}, {shift.end_date=})")
     # Recurrence validation and generation
+    # Single shift is created if none Period, Duration, Repeat and End Date
+    # For Recurrent shifts, the start_time and end_time, define also the initial date of recurrence
     all_shifts: list[ShiftCreate] = []
     all_shifts.append(shift)
     recurrent_shifts = recurrence_maker(shift, session, period, duration, repeat, end_date)
