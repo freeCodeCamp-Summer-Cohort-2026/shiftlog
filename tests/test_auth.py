@@ -157,3 +157,4 @@ def test_protected_endpoints_allow_with_valid_token(client: TestClient):
     finally:
         if override:
             app.dependency_overrides[require_auth] = override
+            
