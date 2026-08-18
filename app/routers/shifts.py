@@ -3,10 +3,10 @@
 Authentication Policy:
 - Mutating endpoints (POST, DELETE) require a valid JWT Bearer token via `require_auth`.
 - Read-only endpoints (GET) are publicly accessible without authentication to allow
-  team-wide visibility into schedules, upcoming shifts, and roster conflicts.
+  team-wide visibility into schedules, upcoming shifts, today's roster, and conflicts.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -46,7 +46,7 @@ def create_shift(
     - **worker_id**: integer ID of the assigned worker (required)
     - **start_time**: ISO-8601 start timestamp (required)
     - **end_time**: ISO-8601 end timestamp (required)
-    - **notes**: Optional note / explanation string (up to 300 characters)
+    - **notes**: Optional notes string (up to 300 characters)
     -----------
     Requirements & Validations:
     - Requires Bearer authentication (`require_auth`).
@@ -221,6 +221,33 @@ def list_upcoming_shifts(
     return get_upcoming_shifts(session=session, worker_id=worker_id, lookahead_minutes=minutes)
 
 
+@router.get("/today", response_model=list[ShiftRead])
+def list_today_shifts(
+    worker_id: Optional[int] = Query(
+        default=None, description="Optional worker ID to filter today's shifts"
+    ),
+    session: Session = Depends(get_session),
+):
+    """
+    GET request:
+    Retrieve shifts starting within the current UTC calendar day.
+    -----------
+    Filters on `start_time` only, consistent with how `/shifts` and `/shifts/upcoming`
+    already filter. A shift that started yesterday and runs past midnight into today
+    is not included since its `start_time` falls on the previous day.
+    -----------
+    Publicly accessible without authentication.
+    """
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow = today + timedelta(days=1)
+
+    statement = select(Shift).where(Shift.start_time >= today, Shift.start_time < tomorrow)
+    if worker_id is not None:
+        statement = statement.where(Shift.worker_id == worker_id)
+
+    return session.exec(statement).all()
+
+
 @router.get("/conflicts", response_model=list[ShiftConflictGroup])
 def list_conflicts(session: Session = Depends(get_session)):
     """
@@ -294,7 +321,7 @@ def delete_shift(
     -----------
     - **shift_id**: integer ID of the shift record to delete.
     -----------
-    Requirements:
+    Requirements & Validations:
     - Requires Bearer authentication (`require_auth`).
     - Rate limited to 10 requests per 30 seconds.
     - Throws 404 if shift is not found.
