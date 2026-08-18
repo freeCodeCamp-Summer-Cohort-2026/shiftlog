@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from tests import test_shifts
+
 
 def test_create_worker(client: TestClient):
     response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})

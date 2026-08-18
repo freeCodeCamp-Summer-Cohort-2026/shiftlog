@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -8,7 +8,16 @@ from sqlmodel import Session, select
 from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 from app.conflicts import find_conflicting_shifts
 from app.database import get_session
-from app.models import Shift, ShiftConflictGroup, ShiftCreate, ShiftRead,ShiftUpdate, Worker, RejectedShift, BulkShiftResponse
+from app.models import (
+    BulkShiftResponse,
+    RejectedShift,
+    Shift,
+    ShiftConflictGroup,
+    ShiftCreate,
+    ShiftRead,
+    ShiftUpdate,
+    Worker,
+)
 from app.rate_limiter import limiter
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
@@ -83,10 +92,15 @@ def update_shift(
     if db_shift is None:
         raise HTTPException(status_code=404, detail="Shift not found")
 
-    # 2. Verify worker exists
+    # 2. Verify worker exists and is active
     worker = session.get(Worker, shift_data.worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
+    if not worker.active:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot schedule a shift for an inactive worker",
+        )
 
     # 3. Check for shift conflicts (excluding the shift currently being updated!)
     conflicts = find_conflicting_shifts(
@@ -94,19 +108,20 @@ def update_shift(
         shift_data.worker_id,
         shift_data.start_time,
         shift_data.end_time,
-        exclude_shift_id=shift_id
+        exclude_shift_id=shift_id,
     )
     if conflicts:
         conflict_ids = ", ".join(str(c.id) for c in conflicts)
         raise HTTPException(
             status_code=409,
-            detail=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"
+            detail=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}",
         )
 
     # 4. Update attributes
     db_shift.worker_id = shift_data.worker_id
     db_shift.start_time = shift_data.start_time
     db_shift.end_time = shift_data.end_time
+    db_shift.notes = shift_data.notes
 
     session.add(db_shift)
     session.commit()
@@ -143,7 +158,11 @@ def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get
         )
         if conflicts:
             conflict_ids = ", ".join(str(c.id) for c in conflicts)
-            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}")
+            rejected_shifts.append(
+                RejectedShift(
+                    shift=shift,
+                    reason=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}",
+                )
             )
             continue
 
@@ -203,6 +222,27 @@ def list_upcoming_shifts(
     job's lookahead window)."""
     return get_upcoming_shifts(session=session, worker_id=worker_id, lookahead_minutes=minutes)
 
+@router.get("/today", response_model=list[ShiftRead])
+def list_today_shifts(
+    worker_id: int | None = None,
+    session: Session = Depends(get_session)
+):
+    """Shifts starting within the current UTC calendar day.
+    Filters on start_time only, consistent with how /shifts and /shifts/upcoming
+    already filter. A shift that started yesterday and runs past midnight into
+    today is not included since its start_time falls on the previous day
+    """
+    today=datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow=today+timedelta(days=1)
+    
+    statement=select(Shift).where(tomorrow>Shift.start_time)
+    statement=statement.where(Shift.start_time>=today)
+    if worker_id is not None:
+        statement = statement.where(Shift.worker_id == worker_id)
+
+    all_shifts = session.exec(statement).all()
+
+    return all_shifts
 
 @router.get("/conflicts", response_model=list[ShiftConflictGroup])
 def list_conflicts(session: Session = Depends(get_session)):
