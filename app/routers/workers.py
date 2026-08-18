@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlmodel import Session, col, select
+from sqlmodel import Session, select, col
 
 from app.auth import require_auth
 from app.database import get_session
@@ -20,6 +20,14 @@ def create_worker(
     session: Session = Depends(get_session),
     current_worker: Worker = Depends(require_auth),
 ):
+    """
+    POST request:
+    Create a worker with the following information:
+    **name**: a string
+    **role**: a string
+    ----------
+    An ID will be auto-assigned as a key in the database with the column name "id".
+    """
     worker.name = " ".join(worker.name.split())
     db_worker = Worker.model_validate(worker)
     session.add(db_worker)
@@ -55,14 +63,17 @@ def update_worker(
     if db_worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
 
+    # Sanitize spaces in name (same as create_worker)
     worker.name = " ".join(worker.name.split())
+
+    # Update worker attributes
     db_worker.name = worker.name
     db_worker.role = worker.role
     db_worker.active = worker.active
-
     session.add(db_worker)
     session.commit()
     session.refresh(db_worker)
+
     return db_worker
 
 
@@ -96,6 +107,7 @@ def list_workers(
         statement = statement.where(Worker.role == role)
 
     if name is not None:
+        # used icontains() for case-insensitivity; added col from SQLmodel to avoid type warning in IDE
         statement = statement.where(col(Worker.name).icontains(name))
 
     return session.exec(statement).all()
@@ -103,6 +115,15 @@ def list_workers(
 
 @router.get("/{worker_id}", response_model=WorkerRead)
 def get_worker(worker_id: int, session: Session = Depends(get_session)):
+    """
+    GET request:
+    Get a single worker based on their ID.
+    -----------
+    This queries the database for a specific worker ID, the parameter required is the database ID for a single worker.
+    -----------
+    Returns name, role and id that was used to query (the parameter)
+    `/workers/1` gets the worker with the ID of `1`
+    """
     worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -115,6 +136,14 @@ def delete_worker(
     session: Session = Depends(get_session),
     current_worker: Worker = Depends(require_auth),
 ):
+    """
+    DELETE request:
+    Delete a worker and cascade delete their assigned shifts.
+    -----------
+    - **worker_id**: integer database ID
+    -----------
+    Throws a 404 error if the worker is not found.
+    """
     worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -136,6 +165,16 @@ def get_worker_hours_summary(
     end: Optional[datetime] = None,
     session: Session = Depends(get_session),
 ):
+    """
+    GET request:
+    Get total hours worked and shift count for a specific worker within an optional time range.
+    -----------
+    - **worker_id**: integer database ID
+    - **start**: optional ISO-8601 datetime start filter
+    - **end**: optional ISO-8601 datetime end filter
+    -----------
+    Throws a 404 error if the worker is not found.
+    """
     worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -150,4 +189,4 @@ def get_worker_hours_summary(
     total_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
 
     return WorkerSummary(worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts))
-  
+
