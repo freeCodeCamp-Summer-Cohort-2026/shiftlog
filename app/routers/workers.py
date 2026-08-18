@@ -128,7 +128,8 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
     return worker
 
 @router.delete("/{worker_id}", status_code=204)
-def delete_worker(worker_id: int, session: Session = Depends(get_session)):
+@limiter.limit("10/30seconds")
+def delete_worker(request:Request, worker_id: int, session: Session = Depends(get_session)):
     worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
