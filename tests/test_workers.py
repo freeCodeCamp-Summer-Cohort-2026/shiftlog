@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 from tests import test_shifts
 
@@ -69,6 +70,31 @@ def test_get_worker_with_no_matching_role(client: TestClient):
     names = {w["name"] for w in response.json()}
     assert names == set()
 
+# using a parameterized function to test several case-insensitive inputs, including just firstname
+@pytest.mark.parametrize("search_query,expected", [("jamie", {"Jamie Lee"}), ("Jamie", {"Jamie Lee"}), ("Jamie Lee", {"Jamie Lee"})])
+def test_get_worker_with_matching_name(client: TestClient, search_query: str, expected: set):
+    client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
+    client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
+
+    response = client.get(f"/workers?name={search_query}")
+    names = {w["name"] for w in response.json()}
+    assert names == expected
+
+def test_get_worker_with_no_matching_name(client: TestClient):
+    client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
+    client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
+
+    response = client.get("/workers?name=Carmen Diaz")
+    names = {w["name"] for w in response.json()}
+    assert names == set()
+
+def test_get_worker_with_role_and_name(client: TestClient):
+    client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
+    client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
+
+    response = client.get("/workers?role=Cashier&name=Sam Osei")
+    names = {w["name"] for w in response.json()}
+    assert names == {"Sam Osei"}
 
 def test_worker_summary_unknown_worker(client: TestClient):
     response = client.get("/workers/9999/summary")
