@@ -139,7 +139,7 @@ def create_shifts_bulk(
 
         db_shift = Shift.model_validate(shift)
         session.add(db_shift)
-        session.flush()
+        session.flush() # Ensure the shift gets an ID before committing
         db_shifts.append(db_shift)
 
     session.commit()
