@@ -275,3 +275,62 @@ def test_shifts_result_with_only_offset(client: TestClient, three_shifts):
     assert first_shift["start_time"] == "2026-08-11T10:00:00"
 
     assert data[1]["start_time"] == "2026-08-11T12:00:00"
+def test_shifts_today_includes_shift_starting_today(client: TestClient, worker_id: int):
+    # Create a shift:
+    today_8am=datetime.utcnow().replace(hour=8, minute=0, second=0, microsecond=0)
+
+    create_res = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": today_8am.isoformat(),
+            "end_time": (today_8am+timedelta(hours=8)).isoformat(),
+        },
+    )
+    assert create_res.status_code == 201
+    shift_id=create_res.json()["id"]
+
+    response=client.get("/shifts/today")
+    assert response.status_code==200
+    ids=[s["id"] for s in response.json()]
+    assert shift_id in ids
+
+
+def test_shifts_today_excludes_shift_starting_tomorrow(client: TestClient, worker_id: int):
+    tomorrow_8am=datetime.utcnow().replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
+
+    create_res=client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": tomorrow_8am.isoformat(),
+            "end_time": (tomorrow_8am+timedelta(hours=8)).isoformat(),
+        }
+    )
+    assert create_res.status_code==201
+    shift_id=create_res.json()["id"]
+
+    response=client.get("/shifts/today")
+    assert response.status_code==200
+    ids=[s["id"] for s in response.json()]
+    assert shift_id not in ids
+
+
+def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(client: TestClient, worker_id: int):
+    yesterday_10pm=datetime.utcnow().replace(hour=22, minute=0, second=0, microsecond=0) - timedelta(days=1)
+
+    create_res=client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": yesterday_10pm.isoformat(),
+            "end_time": (yesterday_10pm+timedelta(hours=8)).isoformat(),
+        }
+    )
+    assert create_res.status_code==201
+    shift_id=create_res.json()["id"]
+
+    response=client.get("/shifts/today")
+    assert response.status_code==200
+    ids=[s["id"] for s in response.json()]
+    assert shift_id not in ids

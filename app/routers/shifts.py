@@ -1,4 +1,5 @@
-from datetime import datetime
+
+from datetime import datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -151,6 +152,27 @@ def list_upcoming_shifts(
     job's lookahead window)."""
     return get_upcoming_shifts(session=session, worker_id=worker_id, lookahead_minutes=minutes)
 
+@router.get("/today", response_model=list[ShiftRead])
+def list_today_shifts(
+    worker_id: int | None = None,
+    session: Session = Depends(get_session)
+):
+    """Shifts starting within the current UTC calendar day.
+    Filters on start_time only, consistent with how /shifts and /shifts/upcoming
+    already filter. A shift that started yesterday and runs past midnight into
+    today is not included since its start_time falls on the previous day
+    """
+    today=datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow=today+timedelta(days=1)
+    
+    statement=select(Shift).where(tomorrow>Shift.start_time)
+    statement=statement.where(Shift.start_time>=today)
+    if worker_id is not None:
+        statement = statement.where(Shift.worker_id == worker_id)
+
+    all_shifts = session.exec(statement).all()
+
+    return all_shifts
 
 @router.get("/conflicts", response_model=list[ShiftConflictGroup])
 def list_conflicts(session: Session = Depends(get_session)):
