@@ -37,7 +37,7 @@ class WorkerRead(WorkerBase):
 
 class ShiftBase(SQLModel):
     worker_id: int = Field(foreign_key="worker.id", index=True)
-    start_time: datetime.datetime
+    start_time: datetime.datetime = Field(index=True)
     end_time: datetime.datetime
     notes: Optional[str] = Field(default=None, max_length=300)
 
