@@ -1,33 +1,32 @@
+"""Test fixtures.
+
+Tests run against an in-memory SQLite database instead of Postgres, wired in
+by overriding the `get_session` dependency. This keeps `pytest` runnable
+with zero external services (including in CI) while still exercising the
+real SQLModel models and routes.
+"""
+
 import os
+
+# Set JWT_SECRET before loading any application modules
 os.environ["JWT_SECRET"] = "ci-local-test-secret-key-that-is-at-least-32-bytes-long!"
+
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
-from app.auth import  require_auth
-from app.routers.auth import create_access_token
+from app.auth import require_auth
 from app.database import get_session
 from app.main import app
 from app.models import Worker
 from app.rate_limiter import limiter
-
-
-@pytest.fixture(name="session", autouse=True)
-def session_fixture():
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
-    SQLModel.metadata.drop_all(engine)
+from app.routers.auth import create_access_token
 
 
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
+    """Keep rate-limit counters isolated between tests."""
     try:
         limiter.reset()
     except Exception:
@@ -39,36 +38,49 @@ def reset_rate_limiter():
         pass
 
 
+@pytest.fixture(name="session", autouse=True)
+def session_fixture():
+    """Yield a fresh in-memory SQLite session per test."""
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        yield session
+    SQLModel.metadata.drop_all(engine)
+
+
 @pytest.fixture(name="client")
 def client_fixture(session: Session):
+    """Yield a TestClient with database session and authentication dependency overrides."""
     def get_session_override():
         return session
 
     mock_worker = Worker(id=1, name="Mock Auth Worker", role="Admin")
 
     app.dependency_overrides[get_session] = get_session_override
-    # Mock require_auth so standard tests don't require DB auth records
     app.dependency_overrides[require_auth] = lambda: mock_worker
 
-    client = TestClient(app)
-    yield client
+    with TestClient(app) as client:
+        yield client
     app.dependency_overrides.clear()
 
 
 @pytest.fixture(name="auth_headers")
 def auth_headers_fixture() -> dict[str, str]:
-    os.environ["JWT_SECRET"] = os.getenv(
-        "JWT_SECRET", "super_secret_jwt_key_that_is_at_least_32_bytes_long!"
-    )
+    """Generate valid Bearer authorization headers for token verification tests."""
     token = create_access_token(worker_id=1)
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture(name="worker_id")
 def worker_id_fixture(client: TestClient) -> int:
+    """Create a default worker and return its database ID."""
     res = client.post(
         "/workers",
-        json={"name": "Default Test Worker", "role": "Cook"},
+        json={"name": "Alice Rivera", "role": "Barista"},
     )
     return res.json()["id"]
-    
+
