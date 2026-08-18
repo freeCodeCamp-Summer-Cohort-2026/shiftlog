@@ -1,3 +1,11 @@
+"""Shift management routes for creating, querying, bulk importing, and deleting shifts.
+
+Authentication Policy:
+- Mutating endpoints (POST, DELETE) require a valid JWT Bearer token via `require_auth`.
+- Read-only endpoints (GET) are publicly accessible without authentication to allow
+  team-wide visibility into schedules, upcoming shifts, and roster conflicts.
+"""
+
 from datetime import datetime
 from typing import Literal, Optional
 
@@ -31,6 +39,23 @@ def create_shift(
     session: Session = Depends(get_session),
     current_worker: Worker = Depends(require_auth),
 ):
+    """
+    POST request:
+    Create a new shift for a worker.
+    -----------
+    - **worker_id**: integer ID of the assigned worker (required)
+    - **start_time**: ISO-8601 start timestamp (required)
+    - **end_time**: ISO-8601 end timestamp (required)
+    - **notes**: Optional note / explanation string (up to 300 characters)
+    -----------
+    Requirements & Validations:
+    - Requires Bearer authentication (`require_auth`).
+    - Rate limited to 10 requests per 30 seconds.
+    - Worker must exist (throws 404 if not found).
+    - Worker must be active (throws 400 if `active` is False).
+    - Shift must not conflict/overlap with existing shifts for the same worker (throws 409).
+    - Shift duration must be between 30 minutes and 24 hours (throws 422).
+    """
     worker = session.get(Worker, shift.worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -61,6 +86,19 @@ def create_shifts_bulk(
     session: Session = Depends(get_session),
     current_worker: Worker = Depends(require_auth),
 ):
+    """
+    POST request:
+    Create multiple shifts for workers in bulk.
+    -----------
+    - Accepts a JSON list of shift creation objects.
+    -----------
+    Requirements & Validations:
+    - Requires Bearer authentication (`require_auth`).
+    - Evaluates each shift independently:
+      * Valid shifts are committed and returned in `accepted_shifts`.
+      * Shifts failing validation (worker not found, inactive worker, DB conflict,
+        or intra-batch conflict) are skipped and itemized in `rejected_shifts` with the reason.
+    """
     db_shifts: list[Shift] = []
     rejected_shifts: list[RejectedShift] = []
 
@@ -116,13 +154,35 @@ def create_shifts_bulk(
 
 @router.get("", response_model=list[ShiftRead])
 def list_shifts(
-    worker_id: Optional[int] = None,
-    start_after: Optional[datetime] = None,
-    end_before: Optional[datetime] = None,
-    sort_by: Literal["start_time", "end_time", "created_at"] = "start_time",
-    order: Literal["asc", "desc"] = "asc",
+    worker_id: Optional[int] = Query(
+        default=None, description="Filter shifts by specific worker ID"
+    ),
+    start_after: Optional[datetime] = Query(
+        default=None, description="Filter shifts starting on or after this ISO-8601 timestamp"
+    ),
+    end_before: Optional[datetime] = Query(
+        default=None, description="Filter shifts starting on or before this ISO-8601 timestamp"
+    ),
+    sort_by: Literal["start_time", "end_time", "created_at"] = Query(
+        default="start_time", description="Field to sort results by"
+    ),
+    order: Literal["asc", "desc"] = Query(
+        default="asc", description="Sort order direction ('asc' or 'desc')"
+    ),
     session: Session = Depends(get_session),
 ):
+    """
+    GET request:
+    List shifts, optionally filtered by worker and/or a date range, with configurable sorting.
+    -----------
+    - `start_after` / `end_before` filter on the shift's own `start_time` (e.g.
+      `?start_after=2026-08-10T00:00:00&end_before=2026-08-17T00:00:00` returns shifts
+      starting in that window).
+    - `sort_by`: `"start_time"`, `"end_time"`, or `"created_at"` (defaults to `"start_time"`).
+    - `order`: `"asc"` or `"desc"` (defaults to `"asc"`).
+    -----------
+    Publicly accessible without authentication.
+    """
     statement = select(Shift)
     if worker_id is not None:
         statement = statement.where(Shift.worker_id == worker_id)
@@ -139,17 +199,39 @@ def list_shifts(
 
 @router.get("/upcoming", response_model=list[ShiftRead])
 def list_upcoming_shifts(
-    minutes: int = DEFAULT_LOOKAHEAD_MINUTES,
-    worker_id: Optional[int] = None,
+    minutes: int = Query(
+        default=DEFAULT_LOOKAHEAD_MINUTES,
+        description="Lookahead window in minutes from current UTC time",
+    ),
+    worker_id: Optional[int] = Query(
+        default=None, description="Optional worker ID to filter upcoming shifts"
+    ),
     session: Session = Depends(get_session),
 ):
-    """Shifts starting within the next `minutes` (defaults to the background
-    job's lookahead window)."""
+    """
+    GET request:
+    Retrieve shifts starting within the next `minutes` window (defaults to the background job's
+    lookahead window).
+    -----------
+    - **minutes**: Optional lookahead duration in minutes.
+    - **worker_id**: Optional worker ID filter.
+    -----------
+    Publicly accessible without authentication.
+    """
     return get_upcoming_shifts(session=session, worker_id=worker_id, lookahead_minutes=minutes)
 
 
 @router.get("/conflicts", response_model=list[ShiftConflictGroup])
 def list_conflicts(session: Session = Depends(get_session)):
+    """
+    GET request:
+    List all workers with conflicting shifts, along with their conflicting shift details.
+    -----------
+    This queries the database and groups overlapping shift schedules by worker ID to identify
+    scheduling issues.
+    -----------
+    Publicly accessible without authentication.
+    """
     statement = select(Shift).order_by(Shift.worker_id, Shift.start_time)
     all_shifts = session.exec(statement).all()
 
@@ -164,6 +246,7 @@ def list_conflicts(session: Session = Depends(get_session)):
         for i in range(n):
             for j in range(i + 1, n):
                 s1, s2 = shifts[i], shifts[j]
+                # Overlap condition: max(start1, start2) < min(end1, end2)
                 if max(s1.start_time, s2.start_time) < min(s1.end_time, s2.end_time):
                     conflicting_ids.add(s1.id)
                     conflicting_ids.add(s2.id)
@@ -182,6 +265,15 @@ def list_conflicts(session: Session = Depends(get_session)):
 
 @router.get("/{shift_id}", response_model=ShiftRead)
 def get_shift(shift_id: int, session: Session = Depends(get_session)):
+    """
+    GET request:
+    Get a single shift record by its database ID.
+    -----------
+    - **shift_id**: integer ID of the shift record.
+    -----------
+    Returns the complete shift record. Throws 404 if shift is not found.
+    Publicly accessible without authentication.
+    """
     shift = session.get(Shift, shift_id)
     if shift is None:
         raise HTTPException(status_code=404, detail="Shift not found")
@@ -196,9 +288,20 @@ def delete_shift(
     session: Session = Depends(get_session),
     current_worker: Worker = Depends(require_auth),
 ):
+    """
+    DELETE request:
+    Delete an existing shift record by ID.
+    -----------
+    - **shift_id**: integer ID of the shift record to delete.
+    -----------
+    Requirements:
+    - Requires Bearer authentication (`require_auth`).
+    - Rate limited to 10 requests per 30 seconds.
+    - Throws 404 if shift is not found.
+    """
     shift = session.get(Shift, shift_id)
     if shift is None:
         raise HTTPException(status_code=404, detail="Shift not found")
     session.delete(shift)
     session.commit()
-    
+
