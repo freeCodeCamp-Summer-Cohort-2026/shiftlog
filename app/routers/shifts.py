@@ -155,8 +155,6 @@ def shift_export_svc(start: datetime, end: datetime, session: Session = Depends(
     statement = select(Shift)
     statement = statement.where(Shift.start_time >= start, Shift.end_time <= end)
     data = session.exec(statement).all()
-
-    print(data)
     fieldnames = [
         "id",
         "worker_id",
