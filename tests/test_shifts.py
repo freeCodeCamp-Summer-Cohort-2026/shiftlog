@@ -302,4 +302,3 @@ def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(client: Te
     assert response.status_code==200
     ids=[s["id"] for s in response.json()]
     assert shift_id not in ids
-

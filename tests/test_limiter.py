@@ -18,6 +18,7 @@ class RateLimitedEndpoint:
     allowed_requests: int
     success_status_code: int
 
+    
 def create_worker_request(
     client: TestClient,
     _: Session,
@@ -86,9 +87,9 @@ def delete_worker_request(
 ) -> Response:
     day = request_number + 1
 
-    worker = Worker(worker_id = worker_id,
-                    name = f"Worker {request_number}",
-                    role = "Tester")
+    worker = Worker(worker_id=worker_id,
+                    name=f"Worker {request_number}",
+                    role="Tester")
 
     shift = Shift(
         worker_id=worker_id,
