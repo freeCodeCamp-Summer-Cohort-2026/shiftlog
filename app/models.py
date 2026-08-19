@@ -17,6 +17,13 @@ class WorkerBase(SQLModel):
     name: str = Field(min_length=1, max_length=100)
     role: str = Field(min_length=1, max_length=50)
     active: bool = Field(default=True, description="Indicates whether the worker is active or not")
+    @field_validator("name")
+    @classmethod
+    def name_length(cls, name):
+        name=" ".join(name.split())
+        if (len(name) == 0):
+            raise ValueError('Name cannot be empty after removing whitespaces.')
+        return name
 
 
 class Worker(WorkerBase, table=True):
