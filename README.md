@@ -77,6 +77,16 @@ docker compose exec api pytest
 
 Note: `shiftlog-api-1` is the name of the container running the Shiftlog API, which you need to confirm.
 
+## Rate Limiting
+
+Some endpoints are rate-limited. Exceeding the limit returns **`429 Too Many Requests`**. Please refer to the table below:
+
+| Method | Path           | Limit                      |
+| ------ | -------------- | -------------------------- |
+| POST   | `/workers`     | 10 requests per 30 seconds | 
+| PUT    | `/workers{id}` | 10 requests per 30 seconds |
+| DELETE | `/workers{id}` | 10 requests per 30 seconds | 
+
 ## API overview
 
 ### General
