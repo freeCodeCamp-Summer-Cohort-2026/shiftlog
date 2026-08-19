@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
-import time
+from fastapi import Depends
+from sqlmodel import Session
+from app.routers.shifts import list_shifts
 
 
 def test_create_shift(client: TestClient, worker_id: int):
@@ -48,20 +50,28 @@ def test_delete_shift(client: TestClient, worker_id: int):
     assert get_response.status_code == 404
 
 
-# 
-def test_cache_shift(client: TestClient, worker_id: int):
+def test_cache_shift(client: TestClient, monkeypatch):
+    list_shifts.cache_clear()
 
-    test_create_shift(client, worker_id)
+    exec_calls = 0
+    real_exec = Session.exec
 
-    first_call = track_get_shift_duration(client, worker_id)
-    second_call = track_get_shift_duration(client, worker_id)
-    assert second_call < first_call
+    def exec_spy(self, statement, *args, **kwargs):
+        nonlocal exec_calls
+        exec_calls += 1
+        return real_exec(self, statement, *args, **kwargs)
 
+    monkeypatch.setattr(Session, "exec", exec_spy)
 
-def track_get_shift_duration(client: TestClient, worker_id: int):
-    start_time = time.perf_counter()
-    response = client.get("/shifts", params={"worker_id": worker_id})
-    end_time = time.perf_counter()
-    return end_time - start_time
+    params = {"worker_id": 1}
+
+    response1 = client.get("/shifts", params=params)
+    response2 = client.get("/shifts", params=params)
+
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+
+    assert exec_calls == 1
+
 
 
