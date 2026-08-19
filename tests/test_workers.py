@@ -169,6 +169,22 @@ def test_worker_delete(client: TestClient):
     assert "id" in worker_body
     workerId = worker_body["id"]
 
+    delete_worker_response = client.delete(f"/workers/{workerId}")
+    assert delete_worker_response.status_code == 204
+
+    get_worker_response = client.get(f"/workers/{workerId}")
+    assert get_worker_response.status_code == 404
+
+
+def test_worker_with_shift_delete(client: TestClient):
+    post_worker_response = client.post("/workers", json={"name": "Jamie Lee", "role":"Cook"})
+    assert post_worker_response.status_code == 201
+    worker_body = post_worker_response.json()
+    assert worker_body["name"] == "Jamie Lee"
+    assert worker_body["role"] == "Cook"
+    assert "id" in worker_body
+    workerId = worker_body["id"]
+
     post_shift_response = client.post(
         "/shifts",
         json={
@@ -184,15 +200,26 @@ def test_worker_delete(client: TestClient):
     assert "created_at" in shift_body
     shiftId = shift_body["id"]
 
+    #Tries to delete without the header first, should return a 409
     delete_worker_response = client.delete(f"/workers/{workerId}")
-    assert delete_worker_response.status_code == 204
+    assert delete_worker_response.status_code == 409
 
+    get_worker_response = client.get(f"/workers/{workerId}")
+    assert get_worker_response.status_code == 200
+
+    get_shift_response = client.get(f"/shifts/{shiftId}")
+    assert get_shift_response.status_code == 200
+
+    #Tries to delete with the header, should delete it successfully with a 204
+    delete_worker_response = client.delete(f"/workers/{workerId}", headers={"Confirm-Delete":"True"})
+    assert delete_worker_response.status_code == 204
+    
     get_worker_response = client.get(f"/workers/{workerId}")
     assert get_worker_response.status_code == 404
 
     get_shift_response = client.get(f"/shifts/{shiftId}")
     assert get_shift_response.status_code == 404
-
+    
 
 def test_deactivate_worker(client: TestClient):
     worker = client.post(

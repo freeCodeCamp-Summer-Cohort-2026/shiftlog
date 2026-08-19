@@ -136,9 +136,15 @@ def delete_worker(request:Request, worker_id: int, session: Session = Depends(ge
 
     workerShifts = shifts.list_shifts(worker_id, None, None, None, "asc", session)
 
-    for i in range(0,len(workerShifts)):
-        session.delete(workerShifts[i])
+    confirmDelete = request.headers.get("Confirm-Delete")
 
+    if len(workerShifts) is not 0:
+        if confirmDelete:
+            for i in range(0,len(workerShifts)):
+                session.delete(workerShifts[i])
+        else:
+            raise HTTPException(status_code=409, detail=f"Worker has {len(workerShifts)} amount of shifts. If you still intend to delete the worker please send a DELETE request with the header Confirm-Delete set to true")
+            
     session.delete(worker)
     session.commit()
 
