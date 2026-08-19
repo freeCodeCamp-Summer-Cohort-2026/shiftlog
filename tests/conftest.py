@@ -59,7 +59,11 @@ def client_fixture(session: Session):
         return session
 
     mock_worker = Worker(id=1, name="Mock Auth Worker", role="Admin")
-
+    # The background watcher loop runs against app.database.engine (Postgres
+    # by default) via the app's lifespan handler; TestClient triggers that
+    # lifespan, so it briefly runs against a DB that doesn't exist in CI.
+    # That's fine - it only logs a caught exception and keeps polling - but
+    # it's noisy, so tests don't rely on it doing anything.
     app.dependency_overrides[get_session] = get_session_override
     app.dependency_overrides[require_auth] = lambda: mock_worker
 
