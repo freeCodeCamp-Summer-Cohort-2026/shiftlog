@@ -87,6 +87,7 @@ class WorkerSummary(SQLModel):
     worker_id: int
     total_hours: float
     shift_count: int
+    average_shift_hours: float
 
 
 class OrgHoursSummary(SQLModel):
