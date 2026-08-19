@@ -18,7 +18,7 @@ class RateLimitedEndpoint:
     allowed_requests: int
     success_status_code: int
 
-
+    
 def create_worker_request(
     client: TestClient,
     _: Session,
@@ -79,6 +79,34 @@ def delete_shift_request(
 
     return client.delete(f"/shifts/{shift.id}")
 
+def delete_worker_request(
+    client: TestClient,
+    session: Session,
+    worker_id: int,
+    request_number: int,
+) -> Response:
+    day = request_number + 1
+
+    worker = Worker(worker_id=worker_id,
+                    name=f"Worker {request_number}",
+                    role="Tester")
+
+    shift = Shift(
+        worker_id=worker_id,
+        start_time=datetime(2026, 10, day, 9, tzinfo=UTC),
+        end_time=datetime(2026, 10, day, 17, tzinfo=UTC),
+    )
+
+    session.add(worker)
+    session.add(shift)
+    session.commit()
+    session.refresh(worker)
+    session.refresh(shift)
+
+    assert worker.id is not None
+    assert shift.id is not None
+
+    return client.delete(f"/workers/{worker.id}")
 
 RATE_LIMITED_ENDPOINTS = [
     pytest.param(
@@ -113,6 +141,14 @@ RATE_LIMITED_ENDPOINTS = [
         ),
         id="delete-shift",
     ),
+    pytest.param(
+        RateLimitedEndpoint(
+            request_factory=delete_worker_request,
+            allowed_requests=10,
+            success_status_code=204,
+        ),
+        id="delete-worker",
+    )
 ]
 
 
