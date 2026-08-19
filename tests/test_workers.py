@@ -467,3 +467,40 @@ def test_workers_summary_total_shift_count_matches_sum_of_individual_counts(clie
     summary = response.json()
     total_shift_count_from_workers = sum(ws["shift_count"] for ws in summary["workers"])
     assert summary["total_shift_count"] == total_shift_count_from_workers
+
+def test_worker_pay(client: TestClient):
+    positive_response = client.post("/workers", json={"name": "Jamie Lee",
+                                                      "role": "Cook",
+                                                      "pay":25.60})
+    assert positive_response.status_code == 201
+    body = positive_response.json()
+    assert body["name"] == "Jamie Lee"
+    assert body["role"] == "Cook"
+    assert body["pay"] == 25.60
+    assert "id" in body
+
+    boundary_response = client.post("/workers", json={"name": "Jamie Lee",
+                                                      "role": "Cook",
+                                                      "pay":0})
+    assert boundary_response.status_code == 201
+    body = boundary_response.json()
+    assert body["name"] == "Jamie Lee"
+    assert body["role"] == "Cook"
+    assert body["pay"] == 0
+    assert "id" in body
+
+    negative_response = client.post("/workers", json={"name": "Jamie Lee",
+                                                      "role": "Cook",
+                                                      "pay":-20})
+    assert negative_response.status_code == 422
+    body = negative_response.json()["detail"][0]["msg"]
+    assert "Pay cannot be a negative value." in body
+
+    null_response = client.post("/workers", json={"name": "Jamie Lee",
+                                                      "role": "Cook"})
+    assert null_response.status_code == 201
+    body = null_response.json()
+    assert body["name"] == "Jamie Lee"
+    assert body["role"] == "Cook"
+    assert body["pay"] == None
+    assert "id" in body
