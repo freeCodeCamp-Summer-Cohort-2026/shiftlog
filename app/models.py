@@ -6,16 +6,17 @@ are the DB models, and the *Create/*Read classes are what the API actually
 accepts and returns.
 """
 
-from datetime import datetime
+import datetime
 from typing import Optional
 
-from pydantic import field_validator, computed_field
+from pydantic import computed_field, field_validator
 from sqlmodel import Field, SQLModel
 
 
 class WorkerBase(SQLModel):
     name: str = Field(min_length=1, max_length=100)
     role: str = Field(min_length=1, max_length=50)
+    active: bool = Field(default=True, description="Indicates whether the worker is active or not")
 
 
 class Worker(WorkerBase, table=True):
@@ -24,6 +25,7 @@ class Worker(WorkerBase, table=True):
 
 class WorkerCreate(WorkerBase):
     pass
+
 
 class WorkerUpdate(WorkerBase):
     pass
@@ -35,21 +37,30 @@ class WorkerRead(WorkerBase):
 
 class ShiftBase(SQLModel):
     worker_id: int = Field(foreign_key="worker.id", index=True)
-    start_time: datetime
-    end_time: datetime
+    start_time: datetime.datetime = Field(index=True)
+    end_time: datetime.datetime
+    notes: Optional[str] = Field(default=None, max_length=300)
 
     @field_validator("end_time")
     @classmethod
-    def end_after_start(cls, end_time: datetime, info):
+    def end_after_start(cls, end_time: datetime.datetime, info):
         start_time = info.data.get("start_time")
         if start_time is not None and end_time <= start_time:
             raise ValueError(f"end_time ({end_time.isoformat()}) must be after start_time ({start_time.isoformat()})")
         return end_time
 
+    @field_validator("end_time")
+    @classmethod
+    def end_start_delta(cls, end_time:datetime.datetime, info):
+        start_time = info.data.get("start_time")
+        if start_time is not None and (((end_time - start_time) > datetime.timedelta(hours=24))or
+                                       ((end_time - start_time) < datetime.timedelta(minutes=30))):
+            raise ValueError(f"A shift must last at least 30 minutes and no more than 24 hours.")
+        return end_time
 
 class Shift(ShiftBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
 
 class ShiftCreate(ShiftBase):
@@ -58,7 +69,8 @@ class ShiftCreate(ShiftBase):
 
 class ShiftRead(ShiftBase):
     id: int
-    created_at: datetime
+    created_at: datetime.datetime
+
     @computed_field
     @property
     def duration_hours(self) -> float:
@@ -69,3 +81,25 @@ class ShiftRead(ShiftBase):
 class ShiftConflictGroup(SQLModel):
     worker_id: int
     conflicting_shifts: list[ShiftRead]
+
+
+class WorkerSummary(SQLModel):
+    worker_id: int
+    total_hours: float
+    shift_count: int
+
+
+class OrgHoursSummary(SQLModel):
+    workers: list[WorkerSummary]
+    grand_total_hours: float
+    total_shift_count: int
+
+
+class RejectedShift(SQLModel):
+    shift: ShiftCreate
+    reason: str
+
+
+class BulkShiftResponse(SQLModel):
+    accepted_shifts: list[ShiftRead]
+    rejected_shifts: list[RejectedShift]

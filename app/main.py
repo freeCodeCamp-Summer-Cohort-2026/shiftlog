@@ -2,15 +2,18 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Depends, status
+from fastapi import Depends, FastAPI, status
+from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from sqlalchemy import text
+from sqlmodel import Session
 
 from app.background import upcoming_shifts_loop
 from app.database import create_db_and_tables, get_session
+from app.rate_limiter import limiter
 from app.routers import shifts, workers
-
-from sqlalchemy import text
-from sqlmodel import Session
-from fastapi.responses import JSONResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("shiftlog.main")
@@ -45,8 +48,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.state.limiter = limiter
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+app.add_middleware(SlowAPIMiddleware)
 app.include_router(workers.router)
 app.include_router(shifts.router)
+
 
 @app.get("/")
 def root():
@@ -54,6 +62,7 @@ def root():
 
 
 # Add endpoint for health check
+
 
 @app.get("/health")
 def health(session: Session = Depends(get_session)):

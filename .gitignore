@@ -7,3 +7,5 @@ venv/
 .pytest_cache/
 .DS_Store
 *.egg-info/
+.py#
+/openvenv.ps1
