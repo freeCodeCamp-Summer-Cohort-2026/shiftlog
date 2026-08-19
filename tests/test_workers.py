@@ -252,3 +252,202 @@ def test_inactive_worker_excluded_from_default_list(client: TestClient):
 
     assert response.status_code == 200
     assert inactive_worker["id"] not in {worker["id"] for worker in response.json()}
+
+
+def test_workers_summary_multiple_workers_returns_correct_summary(client: TestClient):
+    # Create two workers
+    worker1 = client.post("/workers", json={"name": "Worker One", "role": "Role A"}).json()
+    worker2 = client.post("/workers", json={"name": "Worker Two", "role": "Role B"}).json()
+
+    # Create shifts for both workers
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker1["id"],
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker2["id"],
+            "start_time": "2026-08-11T10:00:00",
+            "end_time": "2026-08-11T15:00:00",
+        },
+    )
+
+    # Get the summary for all workers
+    response = client.get("/workers/summary")
+    assert response.status_code == 200
+
+    summary = response.json()
+    assert summary["grand_total_hours"] == 13.0  # 8 + 5 hours
+    assert summary["total_shift_count"] == 2
+
+    worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
+    assert worker_summaries[worker1["id"]]["total_hours"] == 8.0
+    assert worker_summaries[worker1["id"]]["shift_count"] == 1
+    assert worker_summaries[worker2["id"]]["total_hours"] == 5.0
+    assert worker_summaries[worker2["id"]]["shift_count"] == 1
+
+def test_workers_summary_zero_shifts(client: TestClient):
+    # Create a worker with no shifts
+    worker = client.post("/workers", json={"name": "Worker Zero", "role": "Role Z"}).json()
+
+    # Get the summary for all workers
+    response = client.get("/workers/summary")
+    assert response.status_code == 200
+
+    summary = response.json()
+    assert summary["grand_total_hours"] == 0.0
+    assert summary["total_shift_count"] == 0
+
+    worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
+    assert worker_summaries[worker["id"]]["total_hours"] == 0.0
+    assert worker_summaries[worker["id"]]["shift_count"] == 0
+
+
+def test_workers_summary_filters_by_date_range(client: TestClient):
+    # Create a worker
+    worker = client.post("/workers", json={"name": "Worker Date", "role": "Role D"}).json()
+
+    # Create shifts for the worker, some within the date range and some outside
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker["id"],
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker["id"],
+            "start_time": "2026-09-10T09:00:00",
+            "end_time": "2026-09-10T17:00:00",
+        },
+    )
+
+    # Get the summary for all workers within a specific date range
+    response = client.get("/workers/summary?start=2026-08-01T00:00:00&end=2026-08-31T23:59:59")
+    assert response.status_code == 200
+
+    summary = response.json()
+    assert summary["grand_total_hours"] == 8.0  # Only the August shift counts
+    assert summary["total_shift_count"] == 1
+
+    worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
+    assert worker_summaries[worker["id"]]["total_hours"] == 8.0
+    assert worker_summaries[worker["id"]]["shift_count"] == 1
+
+
+def test_workers_summary_no_date_range_includes_all_shifts(client: TestClient):
+    # Create a worker
+    worker = client.post("/workers", json={"name": "Worker All", "role": "Role A"}).json()
+
+    # Create shifts for the worker
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker["id"],
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker["id"],
+            "start_time": "2026-09-10T09:00:00",
+            "end_time": "2026-09-10T17:00:00",
+        },
+    )
+
+    # Get the summary for all workers without specifying a date range
+    response = client.get("/workers/summary")
+    assert response.status_code == 200
+
+    summary = response.json()
+    assert summary["grand_total_hours"] == 16.0  # Both shifts count
+    assert summary["total_shift_count"] == 2
+
+    worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
+    assert worker_summaries[worker["id"]]["total_hours"] == 16.0
+    assert worker_summaries[worker["id"]]["shift_count"] == 2
+
+
+def test_workers_summary_no_workers_returns_empty_list_and_zero_grand_total(client: TestClient):
+    # Ensure there are no workers in the system
+    response = client.get("/workers/summary")
+    assert response.status_code == 200
+
+    summary = response.json()
+    assert summary["grand_total_hours"] == 0.0
+    assert summary["total_shift_count"] == 0
+    assert summary["workers"] == []
+
+
+def test_workers_summary_grand_total_matches_sum_of_individual_totals(client: TestClient):
+    # Create two workers
+    worker1 = client.post("/workers", json={"name": "Worker One", "role": "Role A"}).json()
+    worker2 = client.post("/workers", json={"name": "Worker Two", "role": "Role B"}).json()
+
+    # Create shifts for both workers
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker1["id"],
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker2["id"],
+            "start_time": "2026-08-11T10:00:00",
+            "end_time": "2026-08-11T15:00:00",
+        },
+    )
+
+    # Get the summary for all workers
+    response = client.get("/workers/summary")
+    assert response.status_code == 200
+
+    summary = response.json()
+    total_hours_from_workers = sum(ws["total_hours"] for ws in summary["workers"])
+    assert summary["grand_total_hours"] == total_hours_from_workers
+
+
+def test_workers_summary_total_shift_count_matches_sum_of_individual_counts(client: TestClient):
+    # Create two workers
+    worker1 = client.post("/workers", json={"name": "Worker One", "role": "Role A"}).json()
+    worker2 = client.post("/workers", json={"name": "Worker Two", "role": "Role B"}).json()
+
+    # Create shifts for both workers
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker1["id"],
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker2["id"],
+            "start_time": "2026-08-11T10:00:00",
+            "end_time": "2026-08-11T15:00:00",
+        },
+    )
+
+    # Get the summary for all workers
+    response = client.get("/workers/summary")
+    assert response.status_code == 200
+
+    summary = response.json()
+    total_shift_count_from_workers = sum(ws["shift_count"] for ws in summary["workers"])
+    assert summary["total_shift_count"] == total_shift_count_from_workers

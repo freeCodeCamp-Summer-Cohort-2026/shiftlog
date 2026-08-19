@@ -37,7 +37,7 @@ class WorkerRead(WorkerBase):
 
 class ShiftBase(SQLModel):
     worker_id: int = Field(foreign_key="worker.id", index=True)
-    start_time: datetime.datetime
+    start_time: datetime.datetime = Field(index=True)
     end_time: datetime.datetime
     notes: Optional[str] = Field(default=None, max_length=300)
 
@@ -87,6 +87,12 @@ class WorkerSummary(SQLModel):
     worker_id: int
     total_hours: float
     shift_count: int
+
+
+class OrgHoursSummary(SQLModel):
+    workers: list[WorkerSummary]
+    grand_total_hours: float
+    total_shift_count: int
 
 
 class RejectedShift(SQLModel):

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlmodel import Session, select, col
 
 from app.database import get_session
-from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate
+from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate, OrgHoursSummary
 from app.rate_limiter import limiter
 
 from app.routers import shifts
@@ -109,6 +109,52 @@ def list_workers(
         statement = statement.where(col(Worker.name).icontains(name))
         
     return session.exec(statement).all()
+
+
+@router.get("/summary", response_model=OrgHoursSummary)
+def get_workers_hours_summary(
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    session: Session = Depends(get_session),
+):
+    """
+    GET request:
+    Get a summary of total hours worked and shift count for all workers within an optional date range.
+    ----------
+    This queries the database for all workers and their shifts, calculating total hours worked and shift count.
+    """
+    statement = select(Worker)
+    workers = session.exec(statement).all()
+
+    summaries = []
+    grand_total_hours = 0.0
+    total_shift_count = 0
+
+    for worker in workers:
+        shift_statement = select(Shift).where(Shift.worker_id == worker.id)
+        if start is not None:
+            shift_statement = shift_statement.where(Shift.start_time >= start)
+        if end is not None:
+            shift_statement = shift_statement.where(Shift.start_time <= end)
+
+        shifts = session.exec(shift_statement).all()
+        total_shift_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
+        total_hours = round(total_shift_hours, 2)  # Round to 2 decimal places for better readability
+        grand_total_hours += total_hours
+        total_shift_count += len(shifts)
+        summaries.append(
+            WorkerSummary(
+                worker_id=worker.id,
+                total_hours=total_shift_hours,
+                shift_count=len(shifts)
+            )
+        )
+
+    return OrgHoursSummary(
+        workers=summaries,
+        grand_total_hours=round(grand_total_hours, 2),
+        total_shift_count=total_shift_count
+    )
 
 
 @router.get("/{worker_id}", response_model=WorkerRead)
