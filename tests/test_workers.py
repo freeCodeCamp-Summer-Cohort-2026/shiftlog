@@ -204,12 +204,28 @@ def test_worker_with_shift_delete(client: TestClient):
     delete_worker_response = client.delete(f"/workers/{workerId}")
     assert delete_worker_response.status_code == 409
 
+    #We are asserting for "1" since 1 shift was added in the test
+    assert "1" in delete_worker_response.text
+
     get_worker_response = client.get(f"/workers/{workerId}")
     assert get_worker_response.status_code == 200
 
     get_shift_response = client.get(f"/shifts/{shiftId}")
     assert get_shift_response.status_code == 200
 
+    #Tries to delete with the wrong header value, should return a 409
+    delete_worker_response = client.delete(f"/workers/{workerId}", headers={"Confirm-Delete":"False"})
+    assert delete_worker_response.status_code == 409
+
+    #We are asserting for "1" since 1 shift was added in the test    
+    assert "1" in delete_worker_response.text
+
+    get_worker_response = client.get(f"/workers/{workerId}")
+    assert get_worker_response.status_code == 200
+
+    get_shift_response = client.get(f"/shifts/{shiftId}")
+    assert get_shift_response.status_code == 200
+    
     #Tries to delete with the header, should delete it successfully with a 204
     delete_worker_response = client.delete(f"/workers/{workerId}", headers={"Confirm-Delete":"True"})
     assert delete_worker_response.status_code == 204
