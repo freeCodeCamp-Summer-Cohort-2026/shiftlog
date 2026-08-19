@@ -128,7 +128,19 @@ If both conditions are true, the shifts overlap and the new shift is rejected wi
 
 `5:00 > 5:00` is **false**, so the check fails and the shift is **allowed**. One shift ending exactly when the next begins does not overlap.
 
-## Getting Started / Testing Examples 🧪
+### Rate limiting
+
+To prevent abuse, state-modifying endpoints are rate-limited to **10 requests per 30 seconds** per IP address. Exceeding this threshold results in a `429 Too Many Requests` response.
+
+The following endpoints are currently rate-limited:
+
+- `POST /workers`
+- `PUT /workers/{id}`
+- `DELETE /workers/{id}`
+- `POST /shifts`
+- `DELETE /shifts/{id}`
+
+## Getting Started / Testing Examples 
 
 ### 1. Create a Worker (`POST /workers`)
 
