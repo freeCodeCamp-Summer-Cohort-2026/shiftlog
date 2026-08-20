@@ -164,7 +164,7 @@ def list_today_shifts(
     today=datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow=today+timedelta(days=1)
     
-    statement=select(Shift).where(tomorrow>Shift.start_time)
+    statement=select(Shift).where(Shift.archived == false, tomorrow>Shift.start_time)
     statement=statement.where(Shift.start_time>=today)
     if worker_id is not None:
         statement = statement.where(Shift.worker_id == worker_id)
