@@ -77,8 +77,8 @@ def test_bulk_create_max_batch_size(client: TestClient, worker_id: int):
     payload = [
         {
             "worker_id": worker_id,
-            "start_time": f"2026-080{i+1:02d}T09:00:00",
-            "end_time": f"2026-080{i+1:02d}T17:00:00"
+            "start_time": f"2026-08-{i+1:02d}T09:00:00",
+            "end_time": f"2026-08-{i+1:02d}T17:00:00"
         }
         for i in range(11)
     ]
