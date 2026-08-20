@@ -1,5 +1,6 @@
-from fastapi.testclient import TestClient
 from datetime import datetime, timedelta
+
+from fastapi.testclient import TestClient
 
 
 def _create_shift(client: TestClient, worker_id: int, start: str, end: str):

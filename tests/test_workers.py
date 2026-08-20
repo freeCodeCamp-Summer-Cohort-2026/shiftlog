@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from tests import test_shifts
+
 
 def test_create_worker(client: TestClient):
     response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
@@ -30,6 +30,16 @@ def test_create_worker_requires_name(client: TestClient):
     response = client.post("/workers", json={"name": "", "role": "Cook"})
     assert response.status_code == 422
 
+def test_create_worker_rejects_whitespace_only_name(client: TestClient):
+    response = client.post("/workers", json={"name": " ", "role": "Creator"})
+    assert response.status_code == 422
+
+def test_update_worker_rejects_whitespace_only_name(client: TestClient):
+    create_res = client.post("/workers", json={"name": "Matanat", "role": "Creator"})
+    worker_id = create_res.json()["id"]
+
+    update_res = client.put(f"/workers/{worker_id}", json={"name": " ", "role": "Meta Creator"})
+    assert update_res.status_code == 422
 
 def test_create_worker_sanitizes_name(client: TestClient):
     response = client.post("/workers", json={"name": "Alice   Rivera", "role": "Cook"})
