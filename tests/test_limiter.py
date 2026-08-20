@@ -106,7 +106,7 @@ def delete_worker_request(
     assert worker.id is not None
     assert shift.id is not None
 
-    return client.delete(f"/workers/{worker.id}")
+    return client.delete(f"/workers/{worker.id}", headers={"Confirm-Delete":"True"})
 
 RATE_LIMITED_ENDPOINTS = [
     pytest.param(
