@@ -190,9 +190,7 @@ def test_create_shift_with_notes(client: TestClient, worker_id: int):
     assert get_response.json()["notes"] == notes
 
 
-def test_create_shift_without_notes(
-    client: TestClient, worker_id: int
-):
+def test_create_shift_without_notes(client: TestClient, worker_id: int):
     response = client.post(
         "/shifts",
         json={
@@ -206,9 +204,7 @@ def test_create_shift_without_notes(
     assert response.json()["notes"] is None
 
 
-def test_create_shift_rejects_notes_over_max_length(
-    client: TestClient, worker_id: int
-):
+def test_create_shift_rejects_notes_over_max_length(client: TestClient, worker_id: int):
     response = client.post(
         "/shifts",
         json={
@@ -221,26 +217,48 @@ def test_create_shift_rejects_notes_over_max_length(
 
     assert response.status_code == 422
 
+
 def test_reject_long_shift(client: TestClient, worker_id: int):
-    boundary_response = client.post("/shifts", json = {"worker_id": worker_id,
-                                              "start_time":"2026-08-16T06:00:00",
-                                              "end_time":"2026-08-17T06:00:00"})
+    boundary_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-16T06:00:00",
+            "end_time": "2026-08-17T06:00:00",
+        },
+    )
     assert boundary_response.status_code == 201
 
-    over_response = client.post("/shifts", json = {"worker_id": worker_id,
-                                              "start_time":"2026-08-17T06:00:00",
-                                              "end_time":"2026-08-18T06:00:01"})
+    over_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-17T06:00:00",
+            "end_time": "2026-08-18T06:00:01",
+        },
+    )
     assert over_response.status_code == 422
 
+
 def test_reject_short_shift(client: TestClient, worker_id: int):
-    boundary_response = client.post("/shifts", json = {"worker_id": worker_id,
-                                              "start_time":"2026-08-16T06:00:00",
-                                              "end_time":"2026-08-16T06:30:00"})
+    boundary_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-16T06:00:00",
+            "end_time": "2026-08-16T06:30:00",
+        },
+    )
     assert boundary_response.status_code == 201
 
-    under_response = client.post("/shifts", json = {"worker_id": worker_id,
-                                              "start_time":"2026-08-17T06:00:00",
-                                              "end_time":"2026-08-17T06:29:00"})
+    under_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-17T06:00:00",
+            "end_time": "2026-08-17T06:29:00",
+        },
+    )
     assert under_response.status_code == 422
 
 def test_shifts_today_includes_shift_starting_today(client: TestClient, worker_id: int):

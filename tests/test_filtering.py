@@ -88,7 +88,9 @@ def test_list_shifts_rejects_invalid_order(client: TestClient):
 def test_list_upcoming_shifts_unfiltered(client: TestClient):
     # Create a shift starting in 10 minutes and one starting in 8 hours for 3 different workers
     for i in range(3):
-        worker = client.post("/workers", json={"name": f"Worker {i}", "role": "Role"}).json()
+        worker = client.post(
+            "/workers", json={"name": f"Worker {i}", "role": "Role"}
+        ).json()
         _create_shift(
             client,
             worker["id"],
@@ -112,7 +114,9 @@ def test_list_upcoming_shifts_filtered_by_worker(client: TestClient, worker_id: 
     # create a shift starting in 10 minutes, and a shift starting in 8 hours for 3 different workers
     target_worker_id = None
     for i in range(3):
-        worker = client.post("/workers", json={"name": f"Worker {i}", "role": "Role"}).json()
+        worker = client.post(
+            "/workers", json={"name": f"Worker {i}", "role": "Role"}
+        ).json()
         if i == 1:
             target_worker_id = worker["id"]
         _create_shift(
@@ -128,9 +132,13 @@ def test_list_upcoming_shifts_filtered_by_worker(client: TestClient, worker_id: 
             (datetime.utcnow() + timedelta(hours=14)).isoformat(),
         )
 
-    response = client.get("/shifts/upcoming", params={"minutes": 15, "worker_id": target_worker_id})
+    response = client.get(
+        "/shifts/upcoming", params={"minutes": 15, "worker_id": target_worker_id}
+    )
     assert response.status_code == 200
     shifts = response.json()
-    assert len(shifts) == 1  # Only the shifts starting in 10 minutes for the specified worker
+    assert (
+        len(shifts) == 1
+    )  # Only the shifts starting in 10 minutes for the specified worker
     for shift in shifts:
         assert shift["worker_id"] == target_worker_id

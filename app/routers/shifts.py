@@ -8,7 +8,15 @@ from sqlmodel import Session, select
 from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 from app.conflicts import find_conflicting_shifts
 from app.database import get_session
-from app.models import Shift, ShiftConflictGroup, ShiftCreate, ShiftRead, Worker, RejectedShift, BulkShiftResponse
+from app.models import (
+    Shift,
+    ShiftConflictGroup,
+    ShiftCreate,
+    ShiftRead,
+    Worker,
+    RejectedShift,
+    BulkShiftResponse,
+)
 from app.rate_limiter import limiter
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
@@ -42,12 +50,16 @@ def create_shift(
             detail="Cannot schedule a shift for an inactive worker",
         )
 
-    conflicts = find_conflicting_shifts(session, shift.worker_id, shift.start_time, shift.end_time)
+    conflicts = find_conflicting_shifts(
+        session, shift.worker_id, shift.start_time, shift.end_time
+    )
     if conflicts:
         conflict_ids = ", ".join(str(c.id) for c in conflicts)
         raise HTTPException(
             status_code=409,
-            detail=(f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"),
+            detail=(
+                f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"
+            ),
         )
 
     db_shift = Shift.model_validate(shift)
@@ -58,7 +70,9 @@ def create_shift(
 
 
 @router.post("/bulk", response_model=BulkShiftResponse, status_code=201)
-def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get_session)):
+def create_shifts_bulk(
+    shifts: list[ShiftCreate], session: Session = Depends(get_session)
+):
     """
     POST request:
     ---
@@ -77,10 +91,16 @@ def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get
     for shift in shifts:
         worker = session.get(Worker, shift.worker_id)
         if worker is None:
-            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Worker {shift.worker_id} not found"))
+            rejected_shifts.append(
+                RejectedShift(shift=shift, reason=f"Worker {shift.worker_id} not found")
+            )
             continue
         elif worker.active is False:
-            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Worker {shift.worker_id} is not active"))
+            rejected_shifts.append(
+                RejectedShift(
+                    shift=shift, reason=f"Worker {shift.worker_id} is not active"
+                )
+            )
             continue
 
         conflicts = find_conflicting_shifts(
@@ -88,7 +108,11 @@ def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get
         )
         if conflicts:
             conflict_ids = ", ".join(str(c.id) for c in conflicts)
-            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}")
+            rejected_shifts.append(
+                RejectedShift(
+                    shift=shift,
+                    reason=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}",
+                )
             )
             continue
 
@@ -102,7 +126,7 @@ def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get
         session.refresh(db_shift)
     return BulkShiftResponse(
         accepted_shifts=[ShiftRead.model_validate(s) for s in db_shifts],
-        rejected_shifts=rejected_shifts
+        rejected_shifts=rejected_shifts,
     )
 
 
@@ -133,20 +157,24 @@ def list_shifts(
         "end_time": Shift.end_time,
         "created_at": Shift.created_at,
     }[sort_by or "start_time"]
-    statement = statement.order_by(asc(sort_column) if order == "asc" else desc(sort_column))
+    statement = statement.order_by(
+        asc(sort_column) if order == "asc" else desc(sort_column)
+    )
 
     return session.exec(statement).all()
 
 
 @router.get("/upcoming", response_model=list[ShiftRead])
 def list_upcoming_shifts(
-        minutes: int = DEFAULT_LOOKAHEAD_MINUTES,
-        worker_id: int | None = None,
-        session: Session = Depends(get_session)
+    minutes: int = DEFAULT_LOOKAHEAD_MINUTES,
+    worker_id: int | None = None,
+    session: Session = Depends(get_session),
 ):
     """Shifts starting within the next `minutes` (defaults to the background
     job's lookahead window)."""
-    return get_upcoming_shifts(session=session, worker_id=worker_id, lookahead_minutes=minutes)
+    return get_upcoming_shifts(
+        session=session, worker_id=worker_id, lookahead_minutes=minutes
+    )
 
 @router.get("/today", response_model=list[ShiftRead])
 def list_today_shifts(
@@ -203,7 +231,9 @@ def list_conflicts(session: Session = Depends(get_session)):
             conflict_groups.append(
                 ShiftConflictGroup(
                     worker_id=worker_id,
-                    conflicting_shifts=[ShiftRead.model_validate(s) for s in conflicting_shifts],
+                    conflicting_shifts=[
+                        ShiftRead.model_validate(s) for s in conflicting_shifts
+                    ],
                 )
             )
     return conflict_groups
@@ -230,7 +260,9 @@ def get_shift(shift_id: int, session: Session = Depends(get_session)):
 
 @router.delete("/{shift_id}", status_code=204)
 @limiter.limit("10/30seconds")
-def delete_shift(request: Request, shift_id: int, session: Session = Depends(get_session)):
+def delete_shift(
+    request: Request, shift_id: int, session: Session = Depends(get_session)
+):
     """
     DELETE request:
     ---

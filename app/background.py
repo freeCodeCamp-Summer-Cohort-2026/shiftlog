@@ -44,13 +44,13 @@ def get_upcoming_shifts(
         )
     else:
         statement = (
-                select(Shift)
-                .where(
-                    Shift.start_time >= now,
-                    Shift.start_time <= horizon,
-                )
-                .order_by(Shift.start_time)
+            select(Shift)
+            .where(
+                Shift.start_time >= now,
+                Shift.start_time <= horizon,
             )
+            .order_by(Shift.start_time)
+        )
     return list(session.exec(statement).all())
 
 
@@ -71,7 +71,9 @@ async def upcoming_shifts_loop(
     while True:
         try:
             with Session(engine) as session:
-                for shift in get_upcoming_shifts(session=session, lookahead_minutes=lookahead_minutes):
+                for shift in get_upcoming_shifts(
+                    session=session, lookahead_minutes=lookahead_minutes
+                ):
                     logger.info(
                         "Shift #%s for worker %s starts soon at %s",
                         shift.id,

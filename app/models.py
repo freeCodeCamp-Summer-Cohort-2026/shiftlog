@@ -16,6 +16,7 @@ from sqlmodel import Field, SQLModel
 class WorkerBase(SQLModel):
     name: str = Field(min_length=1, max_length=100)
     role: str = Field(min_length=1, max_length=50)
+
     active: bool = Field(default=True, description="Indicates whether the worker is active or not")
     pay: Optional[float] = Field(default=None, description="Hourly pay of the worker")
 
@@ -53,17 +54,24 @@ class ShiftBase(SQLModel):
     def end_after_start(cls, end_time: datetime.datetime, info):
         start_time = info.data.get("start_time")
         if start_time is not None and end_time <= start_time:
-            raise ValueError(f"end_time ({end_time.isoformat()}) must be after start_time ({start_time.isoformat()})")
+            raise ValueError(
+                f"end_time ({end_time.isoformat()}) must be after start_time ({start_time.isoformat()})"
+            )
         return end_time
 
     @field_validator("end_time")
     @classmethod
-    def end_start_delta(cls, end_time:datetime.datetime, info):
+    def end_start_delta(cls, end_time: datetime.datetime, info):
         start_time = info.data.get("start_time")
-        if start_time is not None and (((end_time - start_time) > datetime.timedelta(hours=24))or
-                                       ((end_time - start_time) < datetime.timedelta(minutes=30))):
-            raise ValueError(f"A shift must last at least 30 minutes and no more than 24 hours.")
+        if start_time is not None and (
+            ((end_time - start_time) > datetime.timedelta(hours=24))
+            or ((end_time - start_time) < datetime.timedelta(minutes=30))
+        ):
+            raise ValueError(
+                f"A shift must last at least 30 minutes and no more than 24 hours."
+            )
         return end_time
+
 
 class Shift(ShiftBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
