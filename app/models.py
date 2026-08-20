@@ -47,6 +47,7 @@ class ShiftBase(SQLModel):
     start_time: datetime.datetime = Field(index=True)
     end_time: datetime.datetime
     notes: Optional[str] = Field(default=None, max_length=300)
+    archived: bool = Field(default=False)
 
     @field_validator("end_time")
     @classmethod
