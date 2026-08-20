@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
@@ -17,6 +17,25 @@ def test_create_shift(client: TestClient, worker_id: int):
     assert body["worker_id"] == worker_id
     assert "id" in body
     assert "created_at" in body
+
+
+def test_create_shift_with_timezone_communicates_utc(client: TestClient, worker_id: int):
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T14:30:00+05:30",
+            "end_time": "2026-08-10T22:30:00+05:30",
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["start_time"].endswith("Z") or body["start_time"].endswith("+00:00")
+    assert body["end_time"].endswith("Z") or body["end_time"].endswith("+00:00")
+    assert body["created_at"].endswith("Z") or body["created_at"].endswith("+00:00")
+    # 14:30 +05:30 is 09:00 UTC
+    assert "2026-08-10T09:00:00" in body["start_time"]
+    assert "2026-08-10T17:00:00" in body["end_time"]
 
 
 def test_create_shift_unknown_worker(client: TestClient):
@@ -80,6 +99,21 @@ def test_invalid_shift_times_end_equals_start(client: TestClient, worker_id: int
     assert "must be after" in body
 
 
+def test_invalid_cross_timezone_shift_times(client: TestClient, worker_id: int):
+    # start_time 10:00 UTC, end_time 14:00+05:30 (08:30 UTC -> before start_time)
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-12T10:00:00Z",
+            "end_time": "2026-08-12T14:00:00+05:30",
+        },
+    )
+    assert response.status_code == 422
+    body = response.json()["detail"][0]["msg"]
+    assert "must be after" in body
+
+
 def test_delete_nonexistent_shift(client: TestClient, worker_id: int):
     create = client.post(
         "/shifts",
@@ -121,7 +155,7 @@ def test_schedule_shift_for_inactive_worker_is_rejected(client: TestClient):
 
 
 def test_upcoming_shifts_returns_only_within_window(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # case 1: inside the window (starts in 10 minutes)
     within_window = client.post(
@@ -221,84 +255,106 @@ def test_create_shift_rejects_notes_over_max_length(
 
     assert response.status_code == 422
 
+
 def test_reject_long_shift(client: TestClient, worker_id: int):
-    boundary_response = client.post("/shifts", json = {"worker_id": worker_id,
-                                              "start_time":"2026-08-16T06:00:00",
-                                              "end_time":"2026-08-17T06:00:00"})
+    boundary_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-16T06:00:00",
+            "end_time": "2026-08-17T06:00:00",
+        },
+    )
     assert boundary_response.status_code == 201
 
-    over_response = client.post("/shifts", json = {"worker_id": worker_id,
-                                              "start_time":"2026-08-17T06:00:00",
-                                              "end_time":"2026-08-18T06:00:01"})
+    over_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-17T06:00:00",
+            "end_time": "2026-08-18T06:00:01",
+        },
+    )
     assert over_response.status_code == 422
 
+
 def test_reject_short_shift(client: TestClient, worker_id: int):
-    boundary_response = client.post("/shifts", json = {"worker_id": worker_id,
-                                              "start_time":"2026-08-16T06:00:00",
-                                              "end_time":"2026-08-16T06:30:00"})
+    boundary_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-16T06:00:00",
+            "end_time": "2026-08-16T06:30:00",
+        },
+    )
     assert boundary_response.status_code == 201
 
-    under_response = client.post("/shifts", json = {"worker_id": worker_id,
-                                              "start_time":"2026-08-17T06:00:00",
-                                              "end_time":"2026-08-17T06:29:00"})
+    under_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-17T06:00:00",
+            "end_time": "2026-08-17T06:29:00",
+        },
+    )
     assert under_response.status_code == 422
 
+
 def test_shifts_today_includes_shift_starting_today(client: TestClient, worker_id: int):
-    # Create a shift:
-    today_8am=datetime.utcnow().replace(hour=8, minute=0, second=0, microsecond=0)
+    today_8am = datetime.now(timezone.utc).replace(hour=8, minute=0, second=0, microsecond=0)
 
     create_res = client.post(
         "/shifts",
         json={
             "worker_id": worker_id,
             "start_time": today_8am.isoformat(),
-            "end_time": (today_8am+timedelta(hours=8)).isoformat(),
+            "end_time": (today_8am + timedelta(hours=8)).isoformat(),
         },
     )
     assert create_res.status_code == 201
-    shift_id=create_res.json()["id"]
+    shift_id = create_res.json()["id"]
 
-    response=client.get("/shifts/today")
-    assert response.status_code==200
-    ids=[s["id"] for s in response.json()]
+    response = client.get("/shifts/today")
+    assert response.status_code == 200
+    ids = [s["id"] for s in response.json()]
     assert shift_id in ids
 
 
 def test_shifts_today_excludes_shift_starting_tomorrow(client: TestClient, worker_id: int):
-    tomorrow_8am=datetime.utcnow().replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    tomorrow_8am = datetime.now(timezone.utc).replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
-    create_res=client.post(
+    create_res = client.post(
         "/shifts",
         json={
             "worker_id": worker_id,
             "start_time": tomorrow_8am.isoformat(),
-            "end_time": (tomorrow_8am+timedelta(hours=8)).isoformat(),
-        }
+            "end_time": (tomorrow_8am + timedelta(hours=8)).isoformat(),
+        },
     )
-    assert create_res.status_code==201
-    shift_id=create_res.json()["id"]
+    assert create_res.status_code == 201
+    shift_id = create_res.json()["id"]
 
-    response=client.get("/shifts/today")
-    assert response.status_code==200
-    ids=[s["id"] for s in response.json()]
+    response = client.get("/shifts/today")
+    assert response.status_code == 200
+    ids = [s["id"] for s in response.json()]
     assert shift_id not in ids
 
 
 def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(client: TestClient, worker_id: int):
-    yesterday_10pm=datetime.utcnow().replace(hour=22, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    yesterday_10pm = datetime.now(timezone.utc).replace(hour=22, minute=0, second=0, microsecond=0) - timedelta(days=1)
 
-    create_res=client.post(
+    create_res = client.post(
         "/shifts",
         json={
             "worker_id": worker_id,
             "start_time": yesterday_10pm.isoformat(),
-            "end_time": (yesterday_10pm+timedelta(hours=8)).isoformat(),
-        }
+            "end_time": (yesterday_10pm + timedelta(hours=8)).isoformat(),
+        },
     )
-    assert create_res.status_code==201
-    shift_id=create_res.json()["id"]
+    assert create_res.status_code == 201
+    shift_id = create_res.json()["id"]
 
-    response=client.get("/shifts/today")
-    assert response.status_code==200
-    ids=[s["id"] for s in response.json()]
+    response = client.get("/shifts/today")
+    assert response.status_code == 200
+    ids = [s["id"] for s in response.json()]
     assert shift_id not in ids

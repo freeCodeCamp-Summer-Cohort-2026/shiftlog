@@ -7,8 +7,7 @@ This is a plain half-open interval overlap check. Back-to-back shifts (one
 ending exactly when the next starts) are NOT treated as conflicts.
 """
 
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
 
 from sqlmodel import Session, select
 
@@ -20,9 +19,20 @@ def find_conflicting_shifts(
     worker_id: int,
     start_time: datetime,
     end_time: datetime,
-    exclude_shift_id: Optional[int] = None,
+    exclude_shift_id: int | None = None,
 ) -> list[Shift]:
+
     """Return any existing shifts for `worker_id` that overlap the given range."""
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=timezone.utc)
+    else:
+        start_time = start_time.astimezone(timezone.utc)
+
+    if end_time.tzinfo is None:
+        end_time = end_time.replace(tzinfo=timezone.utc)
+    else:
+        end_time = end_time.astimezone(timezone.utc)
+
     statement = select(Shift).where(
         Shift.worker_id == worker_id,
         Shift.start_time < end_time,
@@ -32,3 +42,4 @@ def find_conflicting_shifts(
         statement = statement.where(Shift.id != exclude_shift_id)
 
     return list(session.exec(statement).all())
+

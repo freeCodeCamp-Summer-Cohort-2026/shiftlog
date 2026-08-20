@@ -8,7 +8,7 @@ safe to run twice against the same database without clearing it first - it
 will attempt to insert duplicate workers and may hit shift conflicts.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session
 
@@ -38,7 +38,8 @@ def seed() -> None:
 
         # Anchor shifts to "today" at fixed hours so seeded data is always
         # relevant regardless of when you run the script.
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
 
         shifts = [
             Shift(
