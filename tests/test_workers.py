@@ -226,7 +226,6 @@ def test_inactive_worker_excluded_from_default_list(client: TestClient):
     assert response.status_code == 200
     assert inactive_worker["id"] not in {worker["id"] for worker in response.json()}
 
-
 def test_workers_summary_multiple_workers_returns_correct_summary(client: TestClient):
     # Create two workers
     worker1 = client.post("/workers", json={"name": "Worker One", "role": "Role A"}).json()
@@ -261,8 +260,10 @@ def test_workers_summary_multiple_workers_returns_correct_summary(client: TestCl
     worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
     assert worker_summaries[worker1["id"]]["total_hours"] == 8.0
     assert worker_summaries[worker1["id"]]["shift_count"] == 1
+    assert worker_summaries[worker1["id"]]["average_shift_hours"] == 8.0
     assert worker_summaries[worker2["id"]]["total_hours"] == 5.0
     assert worker_summaries[worker2["id"]]["shift_count"] == 1
+    assert worker_summaries[worker2["id"]]["average_shift_hours"] == 5.0
 
 def test_workers_summary_zero_shifts(client: TestClient):
     # Create a worker with no shifts
@@ -279,6 +280,7 @@ def test_workers_summary_zero_shifts(client: TestClient):
     worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
     assert worker_summaries[worker["id"]]["total_hours"] == 0.0
     assert worker_summaries[worker["id"]]["shift_count"] == 0
+    assert worker_summaries[worker["id"]]["average_shift_hours"] == 0.0
 
 
 def test_workers_summary_filters_by_date_range(client: TestClient):
@@ -314,6 +316,7 @@ def test_workers_summary_filters_by_date_range(client: TestClient):
     worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
     assert worker_summaries[worker["id"]]["total_hours"] == 8.0
     assert worker_summaries[worker["id"]]["shift_count"] == 1
+    assert worker_summaries[worker["id"]]["average_shift_hours"] == 8.0
 
 
 def test_workers_summary_no_date_range_includes_all_shifts(client: TestClient):
@@ -349,6 +352,7 @@ def test_workers_summary_no_date_range_includes_all_shifts(client: TestClient):
     worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
     assert worker_summaries[worker["id"]]["total_hours"] == 16.0
     assert worker_summaries[worker["id"]]["shift_count"] == 2
+    assert worker_summaries[worker["id"]]["average_shift_hours"] == 8.0
 
 
 def test_workers_summary_no_workers_returns_empty_list_and_zero_grand_total(client: TestClient):
@@ -424,3 +428,61 @@ def test_workers_summary_total_shift_count_matches_sum_of_individual_counts(clie
     summary = response.json()
     total_shift_count_from_workers = sum(ws["shift_count"] for ws in summary["workers"])
     assert summary["total_shift_count"] == total_shift_count_from_workers
+
+def test_workers_summary_average_shift_hours(client: TestClient):
+    # create two workers
+    worker1 = client.post("/workers", json={"name": "Worker Average 1", "role": "Role A"}).json()
+    worker2 = client.post("/workers", json={"name": "Worker Average 2", "role": "Role B"}).json()
+
+    # create shifts for the workers
+    client.post(
+            "/shifts",
+            json={
+                "worker_id": worker1["id"],
+                "start_time": "2026-08-10T09:00:00",
+                "end_time": "2026-08-10T17:00:00",
+            },
+        )
+    
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker1["id"],
+            "start_time": "2026-08-11T10:00:00",
+            "end_time": "2026-08-11T15:00:00",
+        },
+    )
+
+    client.post(
+            "/shifts",
+            json={
+                "worker_id": worker2["id"],
+                "start_time": "2026-09-10T09:00:00",
+                "end_time": "2026-09-10T17:00:00",
+            },
+    )
+
+    client.post(
+            "/shifts",
+            json={
+                "worker_id": worker2["id"],
+                "start_time": "2026-09-12T12:00:00",
+                "end_time": "2026-09-12T18:00:00",
+            },
+    )
+
+    # Get the summary for all workers
+    response = client.get("/workers/summary")
+    assert response.status_code == 200
+
+    summary = response.json()
+    assert summary["grand_total_hours"] == 27.0
+    assert summary["total_shift_count"] == 4
+
+    worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
+    assert worker_summaries[worker1["id"]]["total_hours"] == 13.0 # 8 + 5
+    assert worker_summaries[worker1["id"]]["shift_count"] == 2
+    assert worker_summaries[worker1["id"]]["average_shift_hours"] == 6.5
+    assert worker_summaries[worker2["id"]]["total_hours"] == 14.0 # 8 + 6
+    assert worker_summaries[worker2["id"]]["shift_count"] == 2
+    assert worker_summaries[worker2["id"]]["average_shift_hours"] == 7.0

@@ -140,7 +140,7 @@ def get_workers_hours_summary(
         shifts = session.exec(shift_statement).all()
         total_shift_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
         total_hours = round(total_shift_hours, 2)  # Round to 2 decimal places for better readability
-        average_shift_hours = total_shift_hours / len(shifts) if len(shifts) != 0 else 0
+        average_shift_hours = total_shift_hours / len(shifts) if len(shifts) != 0 else 0.0
         grand_total_hours += total_hours
         total_shift_count += len(shifts)
     
@@ -212,7 +212,7 @@ def get_worker_hours_summary(
     shifts = session.exec(statement).all()
 
     total_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
-    average_shift_hours = total_hours / len(shifts) if len(shifts) != 0 else 0
+    average_shift_hours = total_hours / len(shifts) if len(shifts) != 0 else 0.0
 
     return WorkerSummary(
         worker_id=worker_id, 
