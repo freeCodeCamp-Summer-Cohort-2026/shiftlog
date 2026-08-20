@@ -16,10 +16,10 @@ from app.database import create_db_and_tables, engine
 from app.models import Shift, Worker
 
 WORKERS = [
-    {"name": "Alice Rivera", "role": "Barista"},
-    {"name": "Bilal Osei", "role": "Cashier"},
-    {"name": "Carmen Diaz", "role": "Shift Lead"},
-    {"name": "Dev Patel", "role": "Cook"},
+    {"name": "Alice Rivera", "role": "Barista", "pay":10.0},
+    {"name": "Bilal Osei", "role": "Cashier", "pay":12.5},
+    {"name": "Carmen Diaz", "role": "Shift Lead", "pay":30},
+    {"name": "Dev Patel", "role": "Cook", "pay":25.0},
     {"name": "Elin Sorensen", "role": "Cashier"},
 ]
 
