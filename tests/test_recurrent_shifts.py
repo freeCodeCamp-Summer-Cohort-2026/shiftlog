@@ -192,3 +192,129 @@ def test_create_shift_recurring_by_period_with_conflict(client: TestClient, work
     data = get_response.json()
     print(f"DEBUG: test_create_shift_recurring_by_period_with_conflict len data={len(data)}")
     assert len(data) == 9  # Existing two shifts, plus initial and six added
+
+def test_create_shift_recurring_by_period_week_day_mondays(client: TestClient, worker_id: int):
+    now = datetime.utcnow()
+    # This week day is variable, so we add this and start recurrence on
+    # the next matching week day
+    start_time = (now + timedelta(days=2, hours=2))
+    end_time = (now + timedelta(days=2, hours=6))
+
+    # List of initial shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 0  # Empty shifts
+
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "period": "Mondays",
+            "duration": "4 weeks"
+        },
+    )
+
+    assert response.status_code == 201
+
+    # List of created shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 5  # Initial shift plus four added
+
+    # Confirm that week day of the last shift is the requested, Monday
+    assert datetime.fromisoformat(data[-1]['start_time']).weekday() == 0
+    print(f"DEBUG: test_create_shift_recurring_by_period_week_day list of shifts"
+          f" data={data}")
+
+def test_create_shift_recurring_by_period_week_day_thursday(client: TestClient, worker_id: int):
+    now = datetime.utcnow()
+    # This week day is known, matching our period, so we start recurrence on
+    # this week day
+    start_time = datetime.fromisoformat("2026-10-01T08:00:00")  # Thursday
+    end_time = datetime.fromisoformat("2026-10-01T16:00:00")
+
+    # List of initial shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 0  # Empty shifts
+
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "period": "Thursday",
+            "duration": "4 weeks"
+        },
+    )
+
+    print(f"DEBUG: test_create_shift_recurring_by_period_week_day response={response.json()}")
+    # Calculation of the day of the week
+    start_week_day = start_time.weekday()
+    assert start_week_day == 3  # Thursdays
+    assert response.status_code == 201
+
+    # List of created shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 5  # Initial shift plus four added
+
+    # Confirm that week day of the last shift is the requested, Thursday
+    assert datetime.fromisoformat(data[-1]['start_time']).weekday() == 3
+    print(f"DEBUG: test_create_shift_recurring_by_period_week_day list of shifts"
+          f" data={data}")
+
+
+def test_create_shift_recurring_by_period_week_day_saturday(client: TestClient, worker_id: int):
+    now = datetime.utcnow()
+    # This week day is known, matching our period, so we start recurrence on
+    # this week day
+    start_time = datetime.fromisoformat("2026-10-03T08:00:00")  # Saturday
+    end_time = datetime.fromisoformat("2026-10-03T16:00:00")
+
+    # List of initial shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 0  # Empty shifts
+
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "period": "Saturdays",
+            "duration": "6 weeks"
+        },
+    )
+
+    print(f"DEBUG: test_create_shift_recurring_by_period_week_day response={response.json()}")
+    # Calculation of the day of the week
+    start_week_day = start_time.weekday()
+    assert start_week_day == 5  # Saturdays
+    assert response.status_code == 201
+
+    # List of created shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 7  # Initial shift plus six added
+
+    # Confirm that week day of the last shift is the requested, Saturday
+    assert datetime.fromisoformat(data[-1]['start_time']).weekday() == 5
+    print(f"DEBUG: test_create_shift_recurring_by_period_week_day list of shifts"
+          f" data={data}")
