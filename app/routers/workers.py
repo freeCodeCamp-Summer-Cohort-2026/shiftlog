@@ -174,16 +174,22 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
 
 @router.delete("/{worker_id}", status_code=204)
 @limiter.limit("10/30seconds")
-def delete_worker(request:Request, worker_id: int, session: Session = Depends(get_session)):
+def delete_worker(request: Request, worker_id: int, session: Session = Depends(get_session)):
     worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
 
     workerShifts = shifts.list_shifts(FilterParams(worker_id=worker_id, order="asc"), session)
 
-    for i in range(0, len(workerShifts)):
-        session.delete(workerShifts[i])
-
+    confirmDelete = request.headers.get("Confirm-Delete")
+    
+    if workerShifts:
+        if confirmDelete and (confirmDelete.lower() == "true"):
+            for i in range(0,len(workerShifts)):
+                session.delete(workerShifts[i])
+        else:
+            raise HTTPException(status_code=409, detail=f"Worker has {len(workerShifts)} shifts. To delete the worker and their shifts, resend the request with the header Confirm-Delete: true")
+            
     session.delete(worker)
     session.commit()
 
