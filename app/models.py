@@ -17,8 +17,15 @@ class WorkerBase(SQLModel):
     name: str = Field(min_length=1, max_length=100)
     role: str = Field(min_length=1, max_length=50)
     active: bool = Field(default=True, description="Indicates whether the worker is active or not")
+    pay: Optional[float] = Field(default=None, description="Hourly pay of the worker")
 
-
+    @field_validator("pay")
+    @classmethod
+    def pay_is_positive(cls, pay: float, info):
+        if pay is not None and pay < 0:
+            raise ValueError("Pay cannot be a negative value.")
+        return pay
+    
 class Worker(WorkerBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -37,7 +44,7 @@ class WorkerRead(WorkerBase):
 
 class ShiftBase(SQLModel):
     worker_id: int = Field(foreign_key="worker.id", index=True)
-    start_time: datetime.datetime
+    start_time: datetime.datetime = Field(index=True)
     end_time: datetime.datetime
     notes: Optional[str] = Field(default=None, max_length=300)
 
@@ -87,6 +94,12 @@ class WorkerSummary(SQLModel):
     worker_id: int
     total_hours: float
     shift_count: int
+
+
+class OrgHoursSummary(SQLModel):
+    workers: list[WorkerSummary]
+    grand_total_hours: float
+    total_shift_count: int
 
 
 class RejectedShift(SQLModel):
