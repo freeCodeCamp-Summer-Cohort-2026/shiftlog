@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
+from app.models import Shift
+
+from sqlmodel import Session
 
 
 def test_create_shift(client: TestClient, worker_id: int):
@@ -30,8 +33,28 @@ def test_create_shift_unknown_worker(client: TestClient):
     )
     assert response.status_code == 404
 
+def test_delete_shift_soft_deletes_row(client: TestClient, worker_id: int, session: Session):
+    create = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    assert create.status_code == 201
+    shift_id = create.json()["id"]
+    assert create.json()["archived"] is False
 
-def test_delete_shift(client: TestClient, worker_id: int):
+    delete_response = client.delete(f"/shifts/{shift_id}")
+    assert delete_response.status_code == 204
+
+    db_shift = session.get(Shift, shift_id)
+    assert db_shift is not None
+    assert db_shift.archived is True
+
+
+def test_archived_shift_excluded_from_normal_list_and_included_with_query_param(client: TestClient, worker_id: int):
     create = client.post(
         "/shifts",
         json={
@@ -41,14 +64,42 @@ def test_delete_shift(client: TestClient, worker_id: int):
         },
     )
     shift_id = create.json()["id"]
+    client.delete(f"/shifts/{shift_id}")
 
-    delete_response = client.delete(f"/shifts/{shift_id}")
-    assert delete_response.status_code == 204
+    normal_res = client.get("/shifts")
+    assert normal_res.status_code == 200
+    normal_ids = [s["id"] for s in normal_res.json()]
+    assert shift_id not in normal_ids
 
-    get_response = client.get(f"/shifts/{shift_id}")
-    assert get_response.status_code == 404
+    archived_res = client.get("/shifts?include_archived=true")
+    assert archived_res.status_code == 200
+    archived_shifts = archived_res.json()
+    archived_ids = [s["id"] for s in archived_shifts]
+    assert shift_id in archived_ids
+
+    matching_shift = next(s for s in archived_shifts if s["id"] == shift_id)
+    assert matching_shift["archived"] is True
 
 
+def test_archived_shift_excluded_from_upcoming(client: TestClient, worker_id: int):
+    now = datetime.utcnow()
+    create = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": (now + timedelta(minutes=10)).isoformat(),
+            "end_time": (now + timedelta(hours=1)).isoformat(),
+        },
+    )
+    shift_id = create.json()["id"]
+
+    upcoming_before = client.get("/shifts/upcoming?minutes=30")
+    assert shift_id in [s["id"] for s in upcoming_before.json()]
+
+    client.delete(f"/shifts/{shift_id}")
+
+    upcoming_after = client.get("/shifts/upcoming?minutes=30")
+    assert shift_id not in [s["id"] for s in upcoming_after.json()]
 def test_invalid_shift_times(client: TestClient, worker_id: int):
     response = client.post(
         "/shifts",
