@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -8,7 +8,15 @@ from sqlmodel import Session, select
 from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 from app.conflicts import find_conflicting_shifts
 from app.database import get_session
-from app.models import Shift, ShiftConflictGroup, ShiftCreate, ShiftRead, Worker, RejectedShift, BulkShiftResponse
+from app.models import (
+    BulkShiftResponse,
+    RejectedShift,
+    Shift,
+    ShiftConflictGroup,
+    ShiftCreate,
+    ShiftRead,
+    Worker,
+)
 from app.rate_limiter import limiter
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
@@ -88,7 +96,11 @@ def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get
         )
         if conflicts:
             conflict_ids = ", ".join(str(c.id) for c in conflicts)
-            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}")
+            rejected_shifts.append(
+                RejectedShift(
+                    shift=shift,
+                    reason=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}",
+                )
             )
             continue
 
@@ -102,7 +114,7 @@ def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get
         session.refresh(db_shift)
     return BulkShiftResponse(
         accepted_shifts=[ShiftRead.model_validate(s) for s in db_shifts],
-        rejected_shifts=rejected_shifts
+        rejected_shifts=rejected_shifts,
     )
 
 
@@ -125,9 +137,18 @@ def list_shifts(
     if worker_id is not None:
         statement = statement.where(Shift.worker_id == worker_id)
     if start_after is not None:
+        if start_after.tzinfo is None:
+            start_after = start_after.replace(tzinfo=timezone.utc)
+        else:
+            start_after = start_after.astimezone(timezone.utc)
         statement = statement.where(Shift.start_time >= start_after)
     if end_before is not None:
+        if end_before.tzinfo is None:
+            end_before = end_before.replace(tzinfo=timezone.utc)
+        else:
+            end_before = end_before.astimezone(timezone.utc)
         statement = statement.where(Shift.start_time <= end_before)
+
     sort_column = {
         "start_time": Shift.start_time,
         "end_time": Shift.end_time,
@@ -140,35 +161,36 @@ def list_shifts(
 
 @router.get("/upcoming", response_model=list[ShiftRead])
 def list_upcoming_shifts(
-        minutes: int = DEFAULT_LOOKAHEAD_MINUTES,
-        worker_id: int | None = None,
-        session: Session = Depends(get_session)
+    minutes: int = DEFAULT_LOOKAHEAD_MINUTES,
+    worker_id: int | None = None,
+    session: Session = Depends(get_session),
 ):
     """Shifts starting within the next `minutes` (defaults to the background
     job's lookahead window)."""
     return get_upcoming_shifts(session=session, worker_id=worker_id, lookahead_minutes=minutes)
 
+
 @router.get("/today", response_model=list[ShiftRead])
 def list_today_shifts(
     worker_id: int | None = None,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ):
     """Shifts starting within the current UTC calendar day.
     Filters on start_time only, consistent with how /shifts and /shifts/upcoming
     already filter. A shift that started yesterday and runs past midnight into
     today is not included since its start_time falls on the previous day
     """
-    today=datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    tomorrow=today+timedelta(days=1)
-    
-    statement=select(Shift).where(tomorrow>Shift.start_time)
-    statement=statement.where(Shift.start_time>=today)
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow = today + timedelta(days=1)
+
+    statement = select(Shift).where(Shift.start_time < tomorrow, Shift.start_time >= today)
     if worker_id is not None:
         statement = statement.where(Shift.worker_id == worker_id)
 
     all_shifts = session.exec(statement).all()
 
     return all_shifts
+
 
 @router.get("/conflicts", response_model=list[ShiftConflictGroup])
 def list_conflicts(session: Session = Depends(get_session)):
