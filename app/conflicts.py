@@ -24,6 +24,7 @@ def find_conflicting_shifts(
 ) -> list[Shift]:
     """Return any existing shifts for `worker_id` that overlap the given range."""
     statement = select(Shift).where(
+        Shift.archived == False,
         Shift.worker_id == worker_id,
         Shift.start_time < end_time,
         Shift.end_time > start_time,
