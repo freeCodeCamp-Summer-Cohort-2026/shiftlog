@@ -111,6 +111,7 @@ def list_shifts(
     worker_id: int | None = None,
     start_after: datetime | None = None,
     end_before: datetime | None = None,
+    include_archived: bool = False,
     sort_by: Literal["start_time", "end_time", "created_at"] | None = None,
     order: Literal["asc", "desc"] = "asc",
     session: Session = Depends(get_session),
@@ -122,6 +123,8 @@ def list_shifts(
     shifts starting in that window.
     """
     statement = select(Shift)
+    if not include_archived:
+        statement = statement.where(Shift.archived == False)
     if worker_id is not None:
         statement = statement.where(Shift.worker_id == worker_id)
     if start_after is not None:
