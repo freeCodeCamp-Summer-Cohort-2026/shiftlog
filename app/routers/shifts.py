@@ -111,10 +111,10 @@ def list_shifts(
     worker_id: int | None = None,
     start_after: datetime | None = None,
     end_before: datetime | None = None,
-    include_archived: bool = False,
     sort_by: Literal["start_time", "end_time", "created_at"] | None = None,
     order: Literal["asc", "desc"] = "asc",
     session: Session = Depends(get_session),
+    include_archived: bool = False,
 ):
     """List shifts, optionally filtered by worker and/or a date range.
 
@@ -164,7 +164,7 @@ def list_today_shifts(
     today=datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow=today+timedelta(days=1)
     
-    statement=select(Shift).where(Shift.archived == false, tomorrow>Shift.start_time)
+    statement=select(Shift).where(Shift.archived == False, tomorrow>Shift.start_time)
     statement=statement.where(Shift.start_time>=today)
     if worker_id is not None:
         statement = statement.where(Shift.worker_id == worker_id)
