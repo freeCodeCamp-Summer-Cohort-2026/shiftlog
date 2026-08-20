@@ -128,7 +128,12 @@ def update_shift(
     session.refresh(db_shift)
     return db_shift
 @router.post("/bulk", response_model=BulkShiftResponse, status_code=201)
-def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get_session)):
+@limiter.limit("10/30seconds")
+def create_shifts_bulk(
+    request: Request,
+    shifts: list[ShiftCreate], 
+    session: Session = Depends(get_session)
+):
     """
     POST request:
     ---
@@ -139,9 +144,19 @@ def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get
     - **End time**
     - **Worker ID**
     ---
+    Maximum 10 shifts allowed per bulk request (throws 400 if exceeded).
+    Rate limited to 10 requests per 30 seconds.
+    ---
     If any worker ID does not exist, an error will be thrown.
     If any shift conflicts with existing shifts for the same worker, an error will be thrown.
     """
+    
+    if len(shifts) > 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Bulk shift creation limit exceeded. Maximum 10 shifts allowed per request.",
+        )
+    
     db_shifts = []
     rejected_shifts = []
     for shift in shifts:

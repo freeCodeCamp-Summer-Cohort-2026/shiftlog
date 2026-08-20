@@ -71,3 +71,17 @@ def test_bulk_create_conflicts_within_batch(client: TestClient, worker_id: int):
     assert body["accepted_shifts"][0]["start_time"].startswith("2026-08-10T09:00:00")
     assert body["rejected_shifts"][0]["shift"]["start_time"].startswith("2026-08-10T11:00:00")
     assert "conflict" in body["rejected_shifts"][0]["reason"].lower()
+
+
+def test_bulk_create_max_batch_size(client: TestClient, worker_id: int):
+    payload = [
+        {
+            "worker_id": worker_id,
+            "start_time": f"2026-080{i+1:02d}T09:00:00",
+            "end_time": f"2026-080{i+1:02d}T17:00:00"
+        }
+        for i in range(11)
+    ]
+    response = client.post("/shifts/bulk", json=payload)
+    assert response.status_code == 400
+    assert "Maximum 10 shifts allowed" in response.json()["detail"]
