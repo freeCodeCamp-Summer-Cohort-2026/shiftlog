@@ -7,15 +7,16 @@ according the provided configuration.
 - **Repeat**: int
 - **End Date**: datetime
 
-- Period if None, defaults to daily, if Duration or Repeat or End Date are set;
+- Period if None, there is no recurrence, otherwise one of Duration or Repeat or End Date must be set;
 - If none of these, then is single shift (original behavior), returns no recurrence == None
 - If Period is set but no limit, an error should be returned
 - Duration, Repeat, End Date if all set, limit is the first reached
+- If conflicting shifts exist, they are ignored (still to define how to communicate)
 
 """
 
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.conflicts import find_conflicting_shifts
@@ -51,20 +52,19 @@ def recurrence_maker(
                     f" but without duration, repeat or end date.")
         )
 
-    print(f"DEBUG: recurrence_maker after validation  {shift.worker_id=}, {period=}, {duration=}, {repeat=}, {end_date=})")
     shifts_list: list[ShiftCreate] = []
     new_shift: ShiftCreate | None = None
-    next_same_week_day = -1
     start_time = shift.start_time
     end_time = shift.end_time
     new_start_time = start_time
     new_end_time = end_time
-
+    repeat = shift.repeat if shift.repeat else 0
+    end_date = shift.end_date if shift.end_date else None
     # Parse weekdays
     lc_period = period.strip().rstrip('s').lower()
     if lc_period in WEEKDAYS:
         num_weekday = dict_weekday_num[lc_period]
-        # next_same_week_day = shift.start_time.strftime("%A").lower()
+        # TODO: If needed use next_same_week_day = shift.start_time.strftime("%A").lower()
         new_start_time = start_time
         next_same_week_day = new_start_time.weekday()
         new_end_time = end_time
@@ -78,7 +78,7 @@ def recurrence_maker(
     else:
         lc_period = -1  # This flags that weekday is not in use
         days, weeks = parse(period)
-    r_days, r_weeks = parse(duration)
+    r_days, r_weeks = parse(duration) if duration else (0, 0)
     if (days, weeks) == (-1,-1) or (r_days, r_weeks) == (-1,-1):
         raise HTTPException(
             status_code=400,
@@ -91,7 +91,8 @@ def recurrence_maker(
 
     r_days = r_days if r_days >= 1 else 1
     limit_date = new_start_time + timedelta(weeks=r_days*r_weeks)
-    while new_start_time < limit_date:
+    limit_date = limit_date if end_date and end_date >= limit_date else end_date
+    while new_start_time < limit_date and repeat >= 0:
         if lc_period == -1:  # For numeric days and weeks
             new_start_time += timedelta(days=days, weeks=weeks)
             new_end_time += timedelta(days=days, weeks=weeks)
@@ -101,16 +102,14 @@ def recurrence_maker(
             new_end_time += timedelta(days=days, weeks=weeks)
 
         if new_shift is None:
-            print(f"DEBUG: recurrence_maker no recurrence asked for shift={shift}")
             return None
         conflicts = find_conflicting_shifts(session, new_shift.worker_id, new_shift.start_time, new_shift.end_time)
-        print(f"DEBUG: recurrence_maker conflicts={conflicts}")
-        # print(f"DEBUG: recurrence_maker return new shift:"
-        #       f" {new_shift.worker_id}, {new_shift.start_time}, {new_shift.end_time}")
+
         # TODO: How to report not created shifts?
         # Don't add the shift if conflicted
         if len(conflicts) == 0:
             shifts_list.append(new_shift)
+        repeat -= 1
 
     return shifts_list
 
@@ -160,5 +159,5 @@ def parse(time_block: str):
             nweek = 0
     else:
         return -1, -1
-    # TODO: Consider other cases and week days names (Monday, ...)
+    # TODO: Implement the other missing cases
     return nday, nweek
