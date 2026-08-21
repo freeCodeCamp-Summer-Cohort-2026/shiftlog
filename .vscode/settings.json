@@ -1,0 +1,11 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.venvPath": "${workspaceFolder}",
+  "python.venv": ".venv",
+  "pyright.venvPath": "${workspaceFolder}",
+  "pyright.venv": ".venv",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}",
+    "${workspaceFolder}/.venv/lib/python3.9/site-packages"
+  ]
+}
