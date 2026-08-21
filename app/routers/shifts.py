@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -232,7 +232,7 @@ def list_today_shifts(
     already filter. A shift that started yesterday and runs past midnight into
     today is not included since its start_time falls on the previous day
     """
-    today=datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today=datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow=today+timedelta(days=1)
     
     statement=select(Shift).where(tomorrow>Shift.start_time)
