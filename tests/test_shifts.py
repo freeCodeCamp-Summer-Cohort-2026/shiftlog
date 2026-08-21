@@ -404,8 +404,6 @@ def test_update_shift_inactive_worker(client: TestClient, worker_id: int):
         == "Cannot schedule a shift for an inactive worker"
     )
 
-def test_shifts_today_excludes_shift_starting_tomorrow(client: TestClient, worker_id: int):
-    tomorrow_8am=datetime.utcnow().replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
 def test_shifts_today_includes_shift_starting_today(
     client: TestClient, worker_id: int

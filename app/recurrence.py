@@ -150,7 +150,7 @@ def parse(time_block: str):
     (0, 4) = parse('monthly') = parse("4 weeks")
     (0, 12) = parse('quarterly')
     (0, 48) = parse('yearly')
-    
+
     """
     assert isinstance(time_block, str)
     from ast import literal_eval
