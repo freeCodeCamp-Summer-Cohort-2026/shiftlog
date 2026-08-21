@@ -356,3 +356,150 @@ def test_create_shift_recurring_daily_repeat(client: TestClient, worker_id: int)
 
     data = get_response.json()
     assert len(data) == 11  # Initial shift plus ten added
+
+def test_create_shift_recurring_weekly_repeat(client: TestClient, worker_id: int):
+    now = datetime.utcnow()
+    start_time = (now + timedelta(days=2, hours=1))
+    end_time = (now + timedelta(days=2, hours=7))
+
+    # List of initial shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 0  # Empty shifts
+
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "period": "weekly",
+            "repeat": 4
+        },
+    )
+
+    # Calculation of last shift end_time for weekly with 4 repetitions
+    final_end_time = (end_time + timedelta(weeks=4)).isoformat()
+    assert response.status_code == 201
+    body = response.json()
+    if body:
+        print(f"DEBUG: test_create_shift_recurring_daily_repeat end_time={body['end_time']}"
+              f" computed={final_end_time}")
+    assert body["end_time"] == final_end_time
+
+    # List of created shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 5  # Initial shift plus 4 weeks added
+
+def test_create_shift_recurring_monthly_repeat(client: TestClient, worker_id: int):
+    now = datetime.utcnow()
+    start_time = (now + timedelta(days=2, hours=1))
+    end_time = (now + timedelta(days=2, hours=7))
+
+    # List of initial shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 0  # Empty shifts
+
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "period": "monthly",
+            "repeat": 3
+        },
+    )
+
+    # Calculation of last shift end_time for daily with 10 repetitions
+    final_end_time = (end_time + timedelta(weeks=12)).isoformat()
+    assert response.status_code == 201
+    body = response.json()
+    if body:
+        print(f"DEBUG: test_create_shift_recurring_daily_repeat end_time={body['end_time']}"
+              f" computed={final_end_time}")
+    assert body["end_time"] == final_end_time
+
+    # List of created shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 4  # Initial shift plus 3 months added
+
+def test_create_shift_recurring_daily_end_date(client: TestClient, worker_id: int):
+    now = datetime.utcnow()
+    start_time = (now + timedelta(days=2, hours=1))
+    end_time = (now + timedelta(days=2, hours=7))
+    end_date = (now + timedelta(days=72, hours=1))
+
+    # List of initial shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 0  # Empty shifts
+
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "period": "1 day",
+            "end_date": end_date.isoformat()
+        },
+    )
+
+    # Calculation of last shift end_time for daily with 70 repetitions
+    final_end_time = (end_time + timedelta(days=70)).isoformat()
+    assert response.status_code == 201
+    body = response.json()
+    if body:
+        print(f"DEBUG: test_create_shift_recurring_daily_repeat end_time={body['end_time']}"
+              f" computed={final_end_time}")
+    assert body["end_time"] == final_end_time
+
+    # List of created shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 71  # Initial shift plus seventy added
+
+def test_create_shift_recurring_weekly_end_date_less_than_start(client: TestClient, worker_id: int):
+    now = datetime.utcnow()
+    start_time = (now + timedelta(days=2, hours=1))
+    end_time = (now + timedelta(days=2, hours=7))
+    end_date = (now + timedelta(days=2))
+
+    # List of initial shifts
+    get_response = client.get(f"/shifts?worker_id={worker_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert len(data) == 0  # Empty shifts
+
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "period": "weekly",
+            "end_date": end_date.isoformat()
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (f"Cannot schedule recurrent shift with limiting"
+                                         f" end date = {end_date.isoformat()} inferior than"
+                                         f" start time = {start_time.isoformat()}.")

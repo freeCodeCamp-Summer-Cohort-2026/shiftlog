@@ -51,10 +51,11 @@ def create_shift(
     - **Repeat**: int
     - **End Date**: datetime
 
-    - Period if None, defaults to daily, if Duration or Repeat or End Date are set;
-    - If none of these, then is single shift (original behavior)
+    - Period if None, there is no recurrence, otherwise one of Duration or Repeat or End Date must be set;
+    - If none of these, then is single shift (original behavior), returns no recurrence == None
     - If Period is set but no limit, an error should be returned
     - Duration, Repeat, End Date if all set, limit is the first reached
+    - If conflicting shifts exist, they are ignored (still to define how to communicate)
 
     - If a worker ID does not exist, an error will be thrown.
     """

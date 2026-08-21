@@ -20,7 +20,7 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.conflicts import find_conflicting_shifts
-from app.models import Shift, ShiftCreate
+from app.models import ShiftCreate
 
 VALID_TBLOCKS = ["daily", "weekly", "5days", "biweekly", "monthly", "quarterly", "yearly",
                  "day", "days", "week", "weeks", "month", "months", "quarter", "quarters",
@@ -58,8 +58,8 @@ def recurrence_maker(
     end_time = shift.end_time
     new_start_time = start_time
     new_end_time = end_time
-    repeat = shift.repeat if shift.repeat else 0
-    end_date = shift.end_date if shift.end_date else None
+    repeat = repeat if repeat else 0
+    end_date = end_date if end_date else None
     # Parse weekdays
     lc_period = period.strip().rstrip('s').lower()
     if lc_period in WEEKDAYS:
@@ -79,19 +79,34 @@ def recurrence_maker(
         lc_period = -1  # This flags that weekday is not in use
         days, weeks = parse(period)
     r_days, r_weeks = parse(duration) if duration else (0, 0)
+    if days > 0 and weeks == 0 and repeat > 0:  # needed for limit_date calculation
+        l_days = repeat
+    elif days == 0 and weeks > 0 and repeat > 0:  # needed for limit_date calculation
+        r_days = repeat
+        r_weeks = weeks
+        l_days = 0
+    elif end_date is not None:  # needed for limit_date calculation
+        r_days = 0
+        r_weeks = 0
+        l_days = (end_date - start_time).days
+    else:
+        l_days = 0
     if (days, weeks) == (-1,-1) or (r_days, r_weeks) == (-1,-1):
         raise HTTPException(
             status_code=400,
             detail=(f"Cannot schedule recurrent shift with period {period},"
                     f" and duration {duration}.")
         )
-
-#    print(f"DEBUG: recurrence_maker parsed {period=} ({days=}, {weeks=})  "
-#          f" {duration=} ({r_days=}, {r_weeks=}).")
+    if end_date is not None and end_date < start_time:  # TODO: Why end_time is None? or end_date < end_time:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"Cannot schedule recurrent shift with limiting end date = {end_date.isoformat()} "
+                    f"inferior than start time = {start_time.isoformat()}."))
 
     r_days = r_days if r_days >= 1 else 1
-    limit_date = new_start_time + timedelta(weeks=r_days*r_weeks)
-    limit_date = limit_date if end_date and end_date >= limit_date else end_date
+    limit_date = new_start_time + timedelta(days=l_days, weeks=r_days*r_weeks)
+    if end_date:
+        limit_date = limit_date if end_date >= limit_date else end_date
     while new_start_time < limit_date and repeat >= 0:
         if lc_period == -1:  # For numeric days and weeks
             new_start_time += timedelta(days=days, weeks=weeks)
@@ -109,7 +124,8 @@ def recurrence_maker(
         # Don't add the shift if conflicted
         if len(conflicts) == 0:
             shifts_list.append(new_shift)
-        repeat -= 1
+        if repeat > 0:
+            repeat -= 1
 
     return shifts_list
 
@@ -141,7 +157,7 @@ def parse(time_block: str):
 
     in_block = time_block.strip().split(' ')
     if len(in_block) > 1:
-        day = in_block[0]
+        day = in_block[0].lower()
         try:
             nday = literal_eval(day)  # TODO: Parse numbers in text mode
         except Exception as e:
