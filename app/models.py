@@ -10,8 +10,7 @@ import datetime
 from typing import Optional
 
 from pydantic import computed_field, field_validator
-from sqlmodel import Field, SQLModel
-
+from sqlmodel import Field, SQLModel, Relationship
 
 class WorkerBase(SQLModel):
     name: str = Field(min_length=1, max_length=100)
@@ -28,8 +27,8 @@ class WorkerBase(SQLModel):
     
 class Worker(WorkerBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-
-
+    shifts: list[Shift] = Relationship(back_populates="worker")
+    
 class WorkerCreate(WorkerBase):
     pass
 
@@ -47,7 +46,7 @@ class ShiftBase(SQLModel):
     start_time: datetime.datetime = Field(index=True)
     end_time: datetime.datetime
     notes: Optional[str] = Field(default=None, max_length=300)
-
+    
     @field_validator("end_time")
     @classmethod
     def end_after_start(cls, end_time: datetime.datetime, info):
@@ -68,23 +67,32 @@ class ShiftBase(SQLModel):
 class Shift(ShiftBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
-
-
+    worker: Worker = Relationship(back_populates="shifts")
+    
 class ShiftCreate(ShiftBase):
     pass
-
 
 class ShiftRead(ShiftBase):
     id: int
     created_at: datetime.datetime
-
+    
     @computed_field
     @property
     def duration_hours(self) -> float:
         shift_duration = (self.end_time - self.start_time).total_seconds() / 3600
         return shift_duration
 
-
+    """@computed_field
+    @property
+    def shift_pay(self) -> float:
+        shift_duration = (self.end_time - self.start_time).total_seconds() / 3600
+        hourly_pay = self.worker.pay
+        if hourly_pay:
+            total_pay = shift_duration * hourly_pay
+        else:
+            total_pay = "This worker has no hourly rate set."
+        return total_pay"""
+        
 class ShiftConflictGroup(SQLModel):
     worker_id: int
     conflicting_shifts: list[ShiftRead]
