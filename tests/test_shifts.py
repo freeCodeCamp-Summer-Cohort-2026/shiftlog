@@ -472,3 +472,62 @@ def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(
     assert response.status_code == 200
     ids = [s["id"] for s in response.json()]
     assert shift_id not in ids
+
+def test_shift_worker_with_pay(client: TestClient):
+    worker_response = client.post("/workers", json={"name": "Jamie Lee",
+                                  "role": "Cook",
+                                  "pay":12.50})
+    worker_id = worker_response.json()["id"]
+    
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T10:00:00"
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["worker_id"] == worker_id
+    assert "id" in body
+    assert "created_at" in body
+    assert body["shift_cost"] == "12.5"
+
+def test_shift_worker_with_zero_pay(client: TestClient):
+    worker_response = client.post("/workers", json={"name": "Jamie Lee",
+                                                    "role": "Cook",
+                                                    "pay":0})
+    
+    worker_id = worker_response.json()["id"]
+
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T10:00:00"
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["worker_id"] == worker_id
+    assert "id" in body
+    assert "created_at" in body
+    assert body["shift_cost"] == "0.0"
+
+def test_shift_worker_with_pay_not_set(client: TestClient, worker_id: int):
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T10:00:00",
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["worker_id"] == worker_id
+    assert "id" in body
+    assert "created_at" in body
+    assert body["shift_cost"] == "This worker has not been set an hourly rate yet."

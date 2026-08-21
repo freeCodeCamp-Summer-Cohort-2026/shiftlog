@@ -22,7 +22,21 @@ from app.rate_limiter import limiter
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
 
+def set_shift_cost(shift, session: Session):
+    worker = session.get(Worker, shift.worker_id)
+    
+    shift_duration = (shift.end_time - shift.start_time).total_seconds() / 3600
 
+    if worker and worker.pay != None:
+        shift_cost = str(shift_duration * worker.pay)
+    else:
+        shift_cost = "This worker has not been set an hourly rate yet."
+
+    shift_dict = shift.model_dump()
+    shift_dict["shift_cost"] = shift_cost
+    
+    return shift_dict
+    
 @router.post("", response_model=ShiftRead, status_code=201)
 @limiter.limit("10/30seconds")
 def create_shift(
@@ -59,7 +73,9 @@ def create_shift(
             detail=(f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"),
         )
 
-    db_shift = Shift.model_validate(shift)
+    shift_with_cost = set_shift_cost(shift, session)
+    
+    db_shift = Shift.model_validate(shift_with_cost)
     session.add(db_shift)
     session.commit()
     session.refresh(db_shift)
@@ -142,19 +158,26 @@ def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get
     If any worker ID does not exist, an error will be thrown.
     If any shift conflicts with existing shifts for the same worker, an error will be thrown.
     """
+    shifts_new = []
+    
+    for shift in shifts:
+        shift_dict = set_shift_cost(shift, session)
+        shifts_new.append(shift_dict)
+        
     db_shifts = []
     rejected_shifts = []
-    for shift in shifts:
-        worker = session.get(Worker, shift.worker_id)
+    
+    for shift in shifts_new:
+        worker = session.get(Worker, shift["worker_id"])
         if worker is None:
-            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Worker {shift.worker_id} not found"))
+            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Worker {shift['worker_id']} not found"))
             continue
         elif worker.active is False:
-            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Worker {shift.worker_id} is not active"))
+            rejected_shifts.append(RejectedShift(shift=shift, reason=f"Worker {shift['worker_id']} is not active"))
             continue
 
         conflicts = find_conflicting_shifts(
-            session, shift.worker_id, shift.start_time, shift.end_time
+            session, shift["worker_id"], shift["start_time"], shift["end_time"]
         )
         if conflicts:
             conflict_ids = ", ".join(str(c.id) for c in conflicts)
@@ -208,8 +231,14 @@ def list_shifts(
         "created_at": Shift.created_at,
     }[sort_by or "start_time"]
     statement = statement.order_by(asc(sort_column) if order == "asc" else desc(sort_column))
+    shifts = session.exec(statement).all() 
 
-    return session.exec(statement).all()
+    shifts_with_cost = []
+    for shift in shifts:
+        shift_dict = set_shift_cost(shift, session)
+        shifts_with_cost.append(shift_dict)
+    
+    return shifts_with_cost
 
 
 @router.get("/upcoming", response_model=list[ShiftRead])
@@ -241,8 +270,13 @@ def list_today_shifts(
         statement = statement.where(Shift.worker_id == worker_id)
 
     all_shifts = session.exec(statement).all()
+    all_shifts_with_cost = []
 
-    return all_shifts
+    for shift in all_shifts:
+        shift_dict = set_shift_cost(shift, session)
+        all_shifts_with_cost.append(shift_dict)
+        
+    return all_shifts_with_cost
 
 @router.get("/conflicts", response_model=list[ShiftConflictGroup])
 def list_conflicts(session: Session = Depends(get_session)):
@@ -252,10 +286,15 @@ def list_conflicts(session: Session = Depends(get_session)):
     """
     statement = select(Shift).order_by(Shift.worker_id, Shift.start_time)
     all_shifts = session.exec(statement).all()
+    all_shifts_with_cost = []
+    
+    for shift in all_shifts:
+        shift_dict = set_shift_cost(shift, session)
+        all_shifts_with_cost.append(shift_dict)
 
     shifts_by_worker: dict[int, list[Shift]] = {}
-    for shift in all_shifts:
-        shifts_by_worker.setdefault(shift.worker_id, []).append(shift)
+    for shift in all_shifts_with_cost:
+        shifts_by_worker.setdefault(shift["worker_id"], []).append(shift)
 
     conflict_groups = []
     for worker_id, shifts in shifts_by_worker.items():
@@ -264,16 +303,16 @@ def list_conflicts(session: Session = Depends(get_session)):
             conflicts = find_conflicting_shifts(
                 session,
                 worker_id,
-                shift.start_time,
-                shift.end_time,
-                exclude_shift_id=shift.id,
+                shift["start_time"],
+                shift["end_time"],
+                exclude_shift_id=shift["id"],
             )
             if conflicts:
-                conflicting.add(shift.id)
+                conflicting.add(shift["id"])
                 conflicting.update(c.id for c in conflicts)
 
         if conflicting:
-            conflicting_shifts = [s for s in shifts if s.id in conflicting]
+            conflicting_shifts = [s for s in shifts if s["id"] in conflicting]
             conflict_groups.append(
                 ShiftConflictGroup(
                     worker_id=worker_id,
@@ -297,9 +336,13 @@ def get_shift(shift_id: int, session: Session = Depends(get_session)):
     - `id` -> this is the shift record ID.
     """
     shift = session.get(Shift, shift_id)
+        
     if shift is None:
         raise HTTPException(status_code=404, detail="Shift not found")
-    return shift
+
+    shift_dict = set_shift_cost(shift, session)
+    
+    return shift_dict
 
 
 @router.delete("/{shift_id}", status_code=204)

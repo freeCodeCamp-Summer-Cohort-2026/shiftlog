@@ -12,13 +12,11 @@ from typing import Optional
 from pydantic import computed_field, field_validator
 from sqlmodel import Field, SQLModel, Relationship
 
-
 class WorkerBase(SQLModel):
     name: str = Field(min_length=1, max_length=100)
     role: str = Field(min_length=1, max_length=50)
     active: bool = Field(default=True, description="Indicates whether the worker is active or not")
     pay: Optional[float] = Field(default=None, description="Hourly pay of the worker")
-
 
     @field_validator("name")
     @classmethod
@@ -37,7 +35,7 @@ class WorkerBase(SQLModel):
     
 class Worker(WorkerBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    shifts: list[Shift] = Relationship(back_populates="worker")
+
     
 class WorkerCreate(WorkerBase):
     pass
@@ -57,7 +55,6 @@ class ShiftBase(SQLModel):
     end_time: datetime.datetime
     notes: Optional[str] = Field(default=None, max_length=300)
 
-    
     @field_validator("end_time")
     @classmethod
     def end_after_start(cls, end_time: datetime.datetime, info):
@@ -78,7 +75,7 @@ class ShiftBase(SQLModel):
 class Shift(ShiftBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
-
+    shift_cost: Optional[str] = Field(default_factory=None)
 
 class ShiftCreate(ShiftBase):
     pass
@@ -87,24 +84,14 @@ class ShiftRead(ShiftBase):
     id: int
     created_at: datetime.datetime
 
-    
     @computed_field
     @property
     def duration_hours(self) -> float:
         shift_duration = (self.end_time - self.start_time).total_seconds() / 3600
         return shift_duration
 
-    """@computed_field
-    @property
-    def shift_pay(self) -> float:
-        shift_duration = (self.end_time - self.start_time).total_seconds() / 3600
-        hourly_pay = self.worker.pay
-        if hourly_pay:
-            total_pay = shift_duration * hourly_pay
-        else:
-            total_pay = "This worker has no hourly rate set."
-        return total_pay"""
-        
+    shift_cost: str
+    
 class ShiftConflictGroup(SQLModel):
     worker_id: int
     conflicting_shifts: list[ShiftRead]
@@ -117,12 +104,14 @@ class WorkerSummary(SQLModel):
     total_hours: float
     shift_count: int
     average_shift_hours: float
-
+    total_shift_wages: float | str
+    average_shift_wages: float | str
 
 class OrgHoursSummary(SQLModel):
     workers: list[WorkerSummary]
     grand_total_hours: float
     total_shift_count: int
+    total_wages: float
 
 
 class RejectedShift(SQLModel):
@@ -133,3 +122,4 @@ class RejectedShift(SQLModel):
 class BulkShiftResponse(SQLModel):
     accepted_shifts: list[ShiftRead]
     rejected_shifts: list[RejectedShift]
+    

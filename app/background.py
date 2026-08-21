@@ -15,13 +15,27 @@ from datetime import datetime, timedelta
 from sqlmodel import Session, select
 
 from app.database import engine
-from app.models import Shift
+from app.models import Shift, Worker
 
 logger = logging.getLogger("shiftlog.background")
 
 DEFAULT_INTERVAL_SECONDS = int(os.getenv("UPCOMING_SHIFT_CHECK_INTERVAL_SECONDS", "60"))
 DEFAULT_LOOKAHEAD_MINUTES = int(os.getenv("UPCOMING_SHIFT_LOOKAHEAD_MINUTES", "30"))
 
+def set_shift_cost(shift, session: Session):
+    worker = session.get(Worker, shift.worker_id)
+    
+    shift_duration = (shift.end_time - shift.start_time).total_seconds() / 3600
+
+    if worker and worker.pay != None:
+        shift_cost = str(shift_duration * worker.pay)
+    else:
+        shift_cost = "This worker has not been set an hourly rate yet."
+
+    shift_dict = shift.model_dump()
+    shift_dict["shift_cost"] = shift_cost
+    
+    return shift_dict
 
 def get_upcoming_shifts(
     session: Session,
@@ -51,8 +65,15 @@ def get_upcoming_shifts(
                 )
                 .order_by(Shift.start_time)
             )
-    return list(session.exec(statement).all())
+        
+    upcoming_shifts = (session.exec(statement).all())
+    upcoming_shifts_with_cost = []
+    
+    for shift in upcoming_shifts:
+        shift_dict = set_shift_cost(shift, session)
+        upcoming_shifts_with_cost.append(shift_dict)
 
+    return upcoming_shifts_with_cost
 
 async def upcoming_shifts_loop(
     interval_seconds: int = DEFAULT_INTERVAL_SECONDS,
