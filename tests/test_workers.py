@@ -540,7 +540,7 @@ def test_workers_summary_average_shift_hours(client: TestClient):
     assert worker_summaries[worker2["id"]]["total_hours"] == 14.0 # 8 + 6
     assert worker_summaries[worker2["id"]]["shift_count"] == 2
     assert worker_summaries[worker2["id"]]["average_shift_hours"] == 7.0
-    
+
 
 def test_worker_pay(client: TestClient):
     positive_response = client.post("/workers", json={"name": "Jamie Lee",

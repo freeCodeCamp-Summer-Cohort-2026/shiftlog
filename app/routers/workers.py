@@ -129,7 +129,7 @@ def get_workers_hours_summary(
     grand_total_hours = 0.0
     total_shift_count = 0
     total_wages = 0.0
-    
+
     for worker in workers:
         shift_statement = select(Shift).where(Shift.worker_id == worker.id)
         if start is not None:
@@ -143,7 +143,7 @@ def get_workers_hours_summary(
         average_shift_hours = total_shift_hours / len(shifts) if len(shifts) != 0 else 0.0
         grand_total_hours += total_hours
         total_shift_count += len(shifts)
-        
+
         if worker.pay != None:
             total_shift_wages = worker.pay * total_hours
             average_shift_wages = worker.pay * average_shift_hours
@@ -151,7 +151,7 @@ def get_workers_hours_summary(
         else:
             total_shift_wages = "Hourly pay has not been set."
             average_shift_wages = "Hourly pay has not been set."
-            
+
             
         summaries.append(
             WorkerSummary(
@@ -196,7 +196,7 @@ def delete_worker(request: Request, worker_id: int, session: Session = Depends(g
         raise HTTPException(status_code=404, detail="Worker not found")
 
     workerShifts = shifts.list_shifts(worker_id, None, None, None, "asc", session)
-    
+
     confirmDelete = request.headers.get("Confirm-Delete")
     
     if workerShifts:
@@ -237,7 +237,7 @@ def get_worker_hours_summary(
     else:
         total_shift_wages = "Hourly pay has not been set yet."
         average_shift_wages = "Hourly pay has not been set yet."
-        
+
     return WorkerSummary(
         worker_id=worker_id, 
         total_hours=total_hours, 
@@ -246,4 +246,3 @@ def get_worker_hours_summary(
         total_shift_wages=total_shift_wages,
         average_shift_wages=average_shift_wages
     )
-

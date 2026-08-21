@@ -18,7 +18,7 @@ class RateLimitedEndpoint:
     allowed_requests: int
     success_status_code: int
 
-
+    
 def create_worker_request(
     client: TestClient,
     _: Session,

@@ -122,4 +122,4 @@ class RejectedShift(SQLModel):
 class BulkShiftResponse(SQLModel):
     accepted_shifts: list[ShiftRead]
     rejected_shifts: list[RejectedShift]
-    
+

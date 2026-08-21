@@ -65,7 +65,7 @@ def get_upcoming_shifts(
                 )
                 .order_by(Shift.start_time)
             )
-        
+
     upcoming_shifts = (session.exec(statement).all())
     upcoming_shifts_with_cost = []
     
