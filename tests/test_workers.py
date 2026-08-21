@@ -195,21 +195,21 @@ def test_worker_delete(client: TestClient):
     assert "id" in worker_body
     worker_id = worker_body["id"]
 
-    delete_worker_response = client.delete(f"/workers/{workerId}")
+    delete_worker_response = client.delete(f"/workers/{worker_id}")
     assert delete_worker_response.status_code == 204
 
-    get_worker_response = client.get(f"/workers/{workerId}")
+    get_worker_response = client.get(f"/workers/{worker_id}")
     assert get_worker_response.status_code == 404
 
 
 def test_worker_with_shift_delete(client: TestClient):
-    post_worker_response = client.post("/workers", json={"name": "Jamie Lee", "role":"Cook"})
+    post_worker_response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     assert post_worker_response.status_code == 201
     worker_body = post_worker_response.json()
     assert worker_body["name"] == "Jamie Lee"
     assert worker_body["role"] == "Cook"
     assert "id" in worker_body
-    workerId = worker_body["id"]
+    worker_id = worker_body["id"]
 
     post_shift_response = client.post(
         "/shifts",
@@ -226,37 +226,37 @@ def test_worker_with_shift_delete(client: TestClient):
     assert "created_at" in shift_body
     shift_id = shift_body["id"]
 
-    #Tries to delete without the header first, should return a 409
-    delete_worker_response = client.delete(f"/workers/{workerId}")
+    # Tries to delete without the header first, should return a 409
+    delete_worker_response = client.delete(f"/workers/{worker_id}")
     assert delete_worker_response.status_code == 409
 
-    #We are asserting for "1" since 1 shift was added in the test
+    # We are asserting for "1" since 1 shift was added in the test
     assert "1" in delete_worker_response.text
 
-    get_worker_response = client.get(f"/workers/{workerId}")
+    get_worker_response = client.get(f"/workers/{worker_id}")
     assert get_worker_response.status_code == 200
 
-    get_shift_response = client.get(f"/shifts/{shiftId}")
+    get_shift_response = client.get(f"/shifts/{shift_id}")
     assert get_shift_response.status_code == 200
 
-    #Tries to delete with the wrong header value, should return a 409
-    delete_worker_response = client.delete(f"/workers/{workerId}", headers={"Confirm-Delete":"False"})
+    # Tries to delete with the wrong header value, should return a 409
+    delete_worker_response = client.delete(f"/workers/{worker_id}", headers={"Confirm-Delete": "False"})
     assert delete_worker_response.status_code == 409
 
-    #We are asserting for "1" since 1 shift was added in the test    
+    # We are asserting for "1" since 1 shift was added in the test    
     assert "1" in delete_worker_response.text
 
-    get_worker_response = client.get(f"/workers/{workerId}")
+    get_worker_response = client.get(f"/workers/{worker_id}")
     assert get_worker_response.status_code == 200
 
-    get_shift_response = client.get(f"/shifts/{shiftId}")
+    get_shift_response = client.get(f"/shifts/{shift_id}")
     assert get_shift_response.status_code == 200
     
-    #Tries to delete with the header, should delete it successfully with a 204
-    delete_worker_response = client.delete(f"/workers/{workerId}", headers={"Confirm-Delete":"True"})
+    # Tries to delete with the header, should delete it successfully with a 204
+    delete_worker_response = client.delete(f"/workers/{worker_id}", headers={"Confirm-Delete": "True"})
     assert delete_worker_response.status_code == 204
     
-    get_worker_response = client.get(f"/workers/{workerId}")
+    get_worker_response = client.get(f"/workers/{worker_id}")
     assert get_worker_response.status_code == 404
 
     get_shift_response = client.get(f"/shifts/{shift_id}")
