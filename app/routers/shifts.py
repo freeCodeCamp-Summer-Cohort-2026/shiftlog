@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi_utilities import ttl_lru_cache
+from pydantic import ValidationError
 from sqlalchemy import asc, desc
 from sqlmodel import Session, select
 
@@ -63,6 +65,9 @@ def create_shift(
     session.add(db_shift)
     session.commit()
     session.refresh(db_shift)
+
+    list_shifts.cache_clear()
+
     return db_shift
 
 
@@ -181,6 +186,7 @@ def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get
 
 
 @router.get("", response_model=list[ShiftRead])
+@ttl_lru_cache(ttl=600, max_size=128)
 def list_shifts(
     worker_id: int | None = None,
     start_after: datetime | None = None,
@@ -319,3 +325,5 @@ def delete_shift(request: Request, shift_id: int, session: Session = Depends(get
         raise HTTPException(status_code=404, detail="Shift not found")
     session.delete(shift)
     session.commit()
+
+    list_shifts.cache_clear()

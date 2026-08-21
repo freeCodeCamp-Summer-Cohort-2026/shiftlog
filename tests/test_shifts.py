@@ -1,3 +1,6 @@
+from fastapi.testclient import TestClient
+from sqlmodel import Session
+from app.routers.shifts import list_shifts
 from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
@@ -48,6 +51,29 @@ def test_delete_shift(client: TestClient, worker_id: int):
     get_response = client.get(f"/shifts/{shift_id}")
     assert get_response.status_code == 404
 
+
+def test_cache_shift(client: TestClient, monkeypatch):
+    list_shifts.cache_clear()
+
+    exec_calls = 0
+    real_exec = Session.exec
+
+    def exec_spy(self, statement, *args, **kwargs):
+        nonlocal exec_calls
+        exec_calls += 1
+        return real_exec(self, statement, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "exec", exec_spy)
+
+    params = {"worker_id": 1}
+
+    response1 = client.get("/shifts", params=params)
+    response2 = client.get("/shifts", params=params)
+
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+
+    assert exec_calls == 1
 
 def test_invalid_shift_times(client: TestClient, worker_id: int):
     response = client.post(
