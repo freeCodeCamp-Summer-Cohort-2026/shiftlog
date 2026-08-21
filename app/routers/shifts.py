@@ -17,6 +17,7 @@ from app.models import (
     ShiftRead,
     ShiftUpdate,
     Worker,
+    DeleteBulkShiftResponse,
 )
 from app.rate_limiter import limiter
 
@@ -177,6 +178,36 @@ def create_shifts_bulk(shifts: list[ShiftCreate], session: Session = Depends(get
     return BulkShiftResponse(
         accepted_shifts=[ShiftRead.model_validate(s) for s in db_shifts],
         rejected_shifts=rejected_shifts
+    )
+
+@router.delete("/bulk", response_model=DeleteBulkShiftResponse, status_code=200)
+@limiter.limit("10/30seconds")
+def delete_shifts_bulk(request: Request, shift_ids: list[int], session: Session = Depends(get_session)):
+    '''
+    Endpoint accepts a list of IDs,
+    loops through them, check which ones are valid and which ones 
+    do not exist or are invalid.
+    IDs that do not exist are collected in a list,
+    and IDs that exist are collected in another list
+    and deleted.
+    it returns both lists
+    '''
+    not_found_ids=[]
+    deleted_ids=[]
+    for shift_id in shift_ids:
+        shift = session.get(Shift, shift_id)
+        if shift is None:
+            not_found_ids.append(shift_id)
+            continue
+
+        deleted_ids.append(shift_id)
+        session.delete(shift)
+
+    session.commit()
+
+    return DeleteBulkShiftResponse(
+        not_found_ids=not_found_ids,
+        deleted_ids=deleted_ids
     )
 
 
