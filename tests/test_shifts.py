@@ -148,6 +148,7 @@ def test_upcoming_shifts_returns_only_within_window(client: TestClient, worker_i
     assert within_window["id"] in ids
     assert out_of_window["id"] not in ids
 
+
 def test_shift_duration(client: TestClient, worker_id: int):
     create = client.post(
         "/shifts",
@@ -359,15 +360,7 @@ def test_shifts_result_with_only_offset(client: TestClient, three_shifts):
     assert first_shift["start_time"] == "2026-08-11T10:00:00"
 
     assert data[1]["start_time"] == "2026-08-11T12:00:00"
-def test_shifts_today_includes_shift_starting_today(client: TestClient, worker_id: int):
-        "/shifts",
-        json={
-            "worker_id": worker_id,
-            "start_time": "2026-08-17T06:00:00",
-            "end_time": "2026-08-17T06:29:00",
-        },
-    )
-    assert under_response.status_code == 422
+
 
 def test_update_shift_notes(client: TestClient, worker_id: int):
     # Create shift with notes
@@ -414,9 +407,7 @@ def test_update_shift_inactive_worker(client: TestClient, worker_id: int):
     shift_id = create.json()["id"]
 
     # Create a second worker and deactivate them
-    worker2 = client.post(
-        "/workers", json={"name": "Alex Smith", "role": "Cashier"}
-    ).json()
+    worker2 = client.post("/workers", json={"name": "Alex Smith", "role": "Cashier"}).json()
     client.put(
         f"/workers/{worker2['id']}",
         json={"name": worker2["name"], "role": worker2["role"], "active": False},
@@ -432,19 +423,12 @@ def test_update_shift_inactive_worker(client: TestClient, worker_id: int):
         },
     )
     assert update_res.status_code == 400
-    assert (
-        update_res.json()["detail"]
-        == "Cannot schedule a shift for an inactive worker"
-    )
+    assert update_res.json()["detail"] == "Cannot schedule a shift for an inactive worker"
 
 
-def test_shifts_today_includes_shift_starting_today(
-    client: TestClient, worker_id: int
-):
+def test_shifts_today_includes_shift_starting_today(client: TestClient, worker_id: int):
     # Create a shift:
-    today_8am = datetime.utcnow().replace(
-        hour=8, minute=0, second=0, microsecond=0
-    )
+    today_8am = datetime.utcnow().replace(hour=8, minute=0, second=0, microsecond=0)
 
     create_res = client.post(
         "/shifts",
@@ -463,12 +447,8 @@ def test_shifts_today_includes_shift_starting_today(
     assert shift_id in ids
 
 
-def test_shifts_today_excludes_shift_starting_tomorrow(
-    client: TestClient, worker_id: int
-):
-    tomorrow_8am = datetime.utcnow().replace(
-        hour=8, minute=0, second=0, microsecond=0
-    ) + timedelta(days=1)
+def test_shifts_today_excludes_shift_starting_tomorrow(client: TestClient, worker_id: int):
+    tomorrow_8am = datetime.utcnow().replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
     create_res = client.post(
         "/shifts",
@@ -487,12 +467,8 @@ def test_shifts_today_excludes_shift_starting_tomorrow(
     assert shift_id not in ids
 
 
-def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(
-    client: TestClient, worker_id: int
-):
-    yesterday_10pm = datetime.utcnow().replace(
-        hour=22, minute=0, second=0, microsecond=0
-    ) - timedelta(days=1)
+def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(client: TestClient, worker_id: int):
+    yesterday_10pm = datetime.utcnow().replace(hour=22, minute=0, second=0, microsecond=0) - timedelta(days=1)
 
     create_res = client.post(
         "/shifts",
@@ -509,4 +485,3 @@ def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(
     assert response.status_code == 200
     ids = [s["id"] for s in response.json()]
     assert shift_id not in ids
-
