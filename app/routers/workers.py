@@ -2,12 +2,13 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlmodel import Session, select, col
+from sqlmodel import Session, col, select
 
 from app.auth import require_auth
 from app.database import get_session
 from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate, OrgHoursSummary
 from app.rate_limiter import limiter
+from app.routers import shifts
 
 router = APIRouter(prefix="/workers", tags=["workers"])
 
@@ -142,13 +143,16 @@ def get_workers_hours_summary(
         shifts = session.exec(shift_statement).all()
         total_shift_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
         total_hours = round(total_shift_hours, 2)  # Round to 2 decimal places for better readability
+        average_shift_hours = total_shift_hours / len(shifts) if len(shifts) != 0 else 0.0
         grand_total_hours += total_hours
         total_shift_count += len(shifts)
+    
         summaries.append(
             WorkerSummary(
                 worker_id=worker.id,
                 total_hours=total_shift_hours,
-                shift_count=len(shifts)
+                shift_count=len(shifts),
+                average_shift_hours=round(average_shift_hours, 2)
             )
         )
 
@@ -198,8 +202,21 @@ def delete_worker(
     # Cascade delete shifts assigned to this worker
     shifts_statement = select(Shift).where(Shift.worker_id == worker_id)
     worker_shifts = session.exec(shifts_statement).all()
-    for shift in worker_shifts:
-        session.delete(shift)
+
+    confirm_delete = request.headers.get("Confirm-Delete")
+
+    if worker_shifts:
+        if confirm_delete and confirm_delete.lower() == "true":
+            for shift in worker_shifts:
+                session.delete(shift)
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Worker has {len(worker_shifts)} shifts. To delete the worker "
+                    "and their shifts, resend the request with the header Confirm-Delete: true"
+                ),
+            )
 
     session.delete(worker)
     session.commit()
@@ -233,6 +250,11 @@ def get_worker_hours_summary(
 
     shifts = session.exec(statement).all()
     total_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
+    average_shift_hours = total_hours / len(shifts) if len(shifts) != 0 else 0.0
 
-    return WorkerSummary(worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts))
-
+    return WorkerSummary(
+        worker_id=worker_id, 
+        total_hours=total_hours, 
+        shift_count=len(shifts),
+        average_shift_hours=round(average_shift_hours, 2)
+        )

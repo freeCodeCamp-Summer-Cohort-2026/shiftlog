@@ -23,6 +23,7 @@ from app.models import (
     ShiftConflictGroup,
     ShiftCreate,
     ShiftRead,
+    ShiftUpdate,
     Worker,
 )
 from app.rate_limiter import limiter
@@ -79,6 +80,67 @@ def create_shift(
     return db_shift
 
 
+@router.put("/{shift_id}", response_model=ShiftRead)
+def update_shift(
+    shift_id: int,
+    shift_data: ShiftUpdate,
+    session: Session = Depends(get_session)
+):
+    """
+    PUT request:
+    Update an existing shift record by its ID.
+    -----------
+    - **shift_id**: integer ID of the shift to update
+    - **worker_id**: integer ID of the worker assigned
+    - **start_time**: datetime string (ISO format)
+    - **end_time**: datetime string (ISO format)
+    -----------
+    Returns the updated shift object.
+    Throws:
+    - 404 if shift_id is not found
+    - 404 if worker_id is not found
+    - 409 if shift conflicts with an existing shift for the worker
+    """
+    # 1. Fetch existing shift record
+    db_shift = session.get(Shift, shift_id)
+    if db_shift is None:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    # 2. Verify worker exists and is active
+    worker = session.get(Worker, shift_data.worker_id)
+    if worker is None:
+        raise HTTPException(status_code=404, detail="Worker not found")
+    if not worker.active:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot schedule a shift for an inactive worker",
+        )
+
+    # 3. Check for shift conflicts (excluding the shift currently being updated!)
+    conflicts = find_conflicting_shifts(
+        session,
+        shift_data.worker_id,
+        shift_data.start_time,
+        shift_data.end_time,
+        exclude_shift_id=shift_id,
+    )
+    if conflicts:
+        conflict_ids = ", ".join(str(c.id) for c in conflicts)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}",
+        )
+
+    # 4. Update attributes
+    db_shift.worker_id = shift_data.worker_id
+    db_shift.start_time = shift_data.start_time
+    db_shift.end_time = shift_data.end_time
+    db_shift.notes = shift_data.notes
+
+    session.add(db_shift)
+    session.commit()
+    session.refresh(db_shift)
+    return db_shift
 @router.post("/bulk", response_model=BulkShiftResponse, status_code=201)
 def create_shifts_bulk(
     shifts: list[ShiftCreate],
@@ -118,8 +180,7 @@ def create_shifts_bulk(
         conflicts = find_conflicting_shifts(
             session, shift.worker_id, shift.start_time, shift.end_time
         )
-
-        # Check against shifts accepted earlier in this exact bulk batch
+# Check against shifts accepted earlier in this exact bulk batch
         intra_batch_conflict = any(
             accepted.worker_id == shift.worker_id
             and max(accepted.start_time, shift.start_time) < min(accepted.end_time, shift.end_time)
