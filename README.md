@@ -92,6 +92,8 @@ Note: `shiftlog-api-1` is the name of the container running the Shiftlog API, wh
 | POST   | `/workers`      | Create a worker     |
 | GET    | `/workers`      | List all workers    |
 | GET    | `/workers/{id}` | Get a single worker |
+| PUT    | `/workers/{id}` | Update a worker     |
+| DELETE | `/workers/{id}` | Delete a worker     |
 
 ### Shifts
 
@@ -128,7 +130,19 @@ If both conditions are true, the shifts overlap and the new shift is rejected wi
 
 `5:00 > 5:00` is **false**, so the check fails and the shift is **allowed**. One shift ending exactly when the next begins does not overlap.
 
-## Getting Started / Testing Examples 🧪
+## Rate limiting
+
+To prevent abuse, certain creation, update, and deletion operations are rate-limited. Exceeding the rate limit returns a `429 Too Many Requests` status code.
+
+The following endpoints are limited to **10 requests per 30 seconds** (per IP address):
+
+- `POST /workers` (Create a worker)
+- `PUT /workers/{id}` (Update a worker)
+- `DELETE /workers/{id}` (Delete a worker)
+- `POST /shifts` (Create a shift)
+- `DELETE /shifts/{id}` (Delete a shift)
+
+## Getting Started / Testing Examples 
 
 ### 1. Create a Worker (`POST /workers`)
 
