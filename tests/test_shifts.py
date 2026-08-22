@@ -473,3 +473,53 @@ def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(
     ids = [s["id"] for s in response.json()]
     assert shift_id not in ids
 
+def test_delete_shifts_bulk_fully_valid_batch(client: TestClient, worker_id: int):
+    response=client.post("/shifts/bulk", json=[
+        {
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+        {
+            "worker_id": worker_id,
+            "start_time": "2026-09-10T09:00:00",
+            "end_time": "2026-09-10T17:00:00",
+        },
+
+    ])
+
+    assert response.status_code == 201
+    response_list=[s["id"] for s in response.json()["accepted_shifts"]]
+
+    deleting_response=client.request("DELETE", "/shifts/bulk", json=response_list)
+
+    assert deleting_response.status_code==200
+
+
+    assert len(deleting_response.json()["not_found_ids"])==0
+    assert set(deleting_response.json()["deleted_ids"])==set(response_list)
+
+def test_delete_shifts_bulk_batch_with_nonexistent_ids(client: TestClient, worker_id: int):
+    create_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    assert create_response.status_code == 201
+
+    existing_id=create_response.json()["id"]
+    non_existent_id=existing_id + 999999
+
+    deleting_response=client.request("DELETE", "/shifts/bulk", json=[existing_id, non_existent_id])
+
+    assert deleting_response.status_code==200
+
+    assert existing_id in deleting_response.json()["deleted_ids"]
+    assert non_existent_id in deleting_response.json()["not_found_ids"]
+
+def test_delete_shifts_bulk_exceeds_limit(client: TestClient):
+    response = client.request("DELETE", "/shifts/bulk", json=list(range(1, 12)))
+    assert response.status_code == 400

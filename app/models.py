@@ -122,3 +122,7 @@ class RejectedShift(SQLModel):
 class BulkShiftResponse(SQLModel):
     accepted_shifts: list[ShiftRead]
     rejected_shifts: list[RejectedShift]
+
+class DeleteBulkShiftResponse(SQLModel):
+    deleted_ids: list[int]
+    not_found_ids: list[int]
