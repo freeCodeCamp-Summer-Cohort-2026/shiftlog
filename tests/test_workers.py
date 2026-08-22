@@ -1,155 +1,38 @@
 from datetime import datetime, timedelta, timezone
-import pytest
+
 from fastapi.testclient import TestClient
 
 
-def test_create_worker(client: TestClient):
-    response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
+def test_create_shift(client: TestClient, worker_id: int):
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
     assert response.status_code == 201
     body = response.json()
-    assert body["name"] == "Jamie Lee"
-    assert body["role"] == "Cook"
+    assert body["worker_id"] == worker_id
     assert "id" in body
+    assert "created_at" in body
 
 
-def test_update_worker(client: TestClient):
-    create_res = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
-    worker_id = create_res.json()["id"]
-
-    update_res = client.put(
-        f"/workers/{worker_id}", json={"name": "Jamie Lee", "role": "Head Chef"}
+def test_create_shift_unknown_worker(client: TestClient):
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": 9999,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
     )
-    assert update_res.status_code == 200
-
-    body = update_res.json()
-    assert body["id"] == worker_id
-    assert body["role"] == "Head Chef"
-
-
-def test_update_worker_not_found(client: TestClient):
-    response = client.put("/workers/9999", json={"name": "Nobody", "role": "Ghost"})
     assert response.status_code == 404
 
 
-def test_create_worker_requires_name(client: TestClient):
-    response = client.post("/workers", json={"name": "", "role": "Cook"})
-    assert response.status_code == 422
-
-
-def test_create_worker_rejects_whitespace_only_name(client: TestClient):
-    response = client.post("/workers", json={"name": " ", "role": "Creator"})
-    assert response.status_code == 422
-
-
-def test_update_worker_rejects_whitespace_only_name(client: TestClient):
-    create_res = client.post("/workers", json={"name": "Matanat", "role": "Creator"})
-    worker_id = create_res.json()["id"]
-
-    update_res = client.put(f"/workers/{worker_id}", json={"name": " ", "role": "Meta Creator"})
-    assert update_res.status_code == 422
-
-
-def test_create_worker_sanitizes_name(client: TestClient):
-    response = client.post("/workers", json={"name": "Alice   Rivera", "role": "Cook"})
-    assert response.status_code == 201
-    body = response.json()
-    assert body["name"] == "Alice Rivera"
-
-
-def test_list_workers(client: TestClient):
-    client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
-    client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
-
-    response = client.get("/workers")
-    assert response.status_code == 200
-    names = {w["name"] for w in response.json()}
-    assert names == {"Jamie Lee", "Sam Osei"}
-
-
-def test_get_worker_not_found(client: TestClient):
-    response = client.get("/workers/999")
-    assert response.status_code == 404
-
-
-def test_get_worker_with_matching_role(client: TestClient):
-    client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
-    client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
-
-    response = client.get("/workers?role=Cashier")
-    names = {w["name"] for w in response.json()}
-    assert names == {"Sam Osei"}
-
-
-def test_get_worker_with_no_matching_role(client: TestClient):
-    client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
-    client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
-
-    response = client.get("/workers?role=Owner")
-    names = {w["name"] for w in response.json()}
-    assert names == set()
-
-
-# using a parameterized function to test several case-insensitive inputs, including just firstname
-@pytest.mark.parametrize(
-    "search_query,expected",
-    [("jamie", {"Jamie Lee"}), ("Jamie", {"Jamie Lee"}), ("Jamie Lee", {"Jamie Lee"})],
-)
-def test_get_worker_with_matching_name(client: TestClient, search_query: str, expected: set):
-    client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
-    client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
-
-    response = client.get(f"/workers?name={search_query}")
-    names = {w["name"] for w in response.json()}
-    assert names == expected
-
-
-def test_get_worker_with_no_matching_name(client: TestClient):
-    client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
-    client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
-
-    response = client.get("/workers?name=Carmen Diaz")
-    names = {w["name"] for w in response.json()}
-    assert names == set()
-
-
-def test_get_worker_with_role_and_name(client: TestClient):
-    client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
-    client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
-
-    response = client.get("/workers?role=Cashier&name=Sam Osei")
-    names = {w["name"] for w in response.json()}
-    assert names == {"Sam Osei"}
-
-
-def test_worker_summary_unknown_worker(client: TestClient):
-    response = client.get("/workers/9999/summary")
-    assert response.status_code == 404
-
-
-def test_worker_summary_zero_shifts(client: TestClient):
-    """
-    Create a new worker and immediately call the summary endpoint
-    since a fresh worker has no shifts
-    """
-    create_res = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
-    assert create_res.status_code == 201
-    worker_id = create_res.json()["id"]
-
-    response = client.get(f"/workers/{worker_id}/summary")
-    assert response.status_code == 200
-
-    assert response.json()["shift_count"] == 0
-    assert response.json()["total_hours"] == 0
-
-
-def test_worker_summary_within_range(client: TestClient):
-    # Create a brand new worker:
-    create_res = client.post("/workers", json={"name": "Matanat Khalil", "role": "Creator"})
-    assert create_res.status_code == 201
-    worker_id = create_res.json()["id"]
-
-    # Create a shift within the range for this worker:
-    response_within = client.post(
+def test_delete_shift(client: TestClient, worker_id: int):
+    create = client.post(
         "/shifts",
         json={
             "worker_id": worker_id,
@@ -157,452 +40,290 @@ def test_worker_summary_within_range(client: TestClient):
             "end_time": "2026-08-10T17:00:00",
         },
     )
-    assert response_within.status_code == 201
+    shift_id = create.json()["id"]
 
-    # Create a shift outside the range for this worker:
-    response_out = client.post(
+    delete_response = client.delete(f"/shifts/{shift_id}")
+    assert delete_response.status_code == 204
+
+    get_response = client.get(f"/shifts/{shift_id}")
+    assert get_response.status_code == 404
+
+
+def test_invalid_shift_times(client: TestClient, worker_id: int):
+    response = client.post(
         "/shifts",
         json={
             "worker_id": worker_id,
-            "start_time": "2026-09-10T09:00:00",
-            "end_time": "2026-09-10T17:00:00",
+            "start_time": "2026-08-12T17:00:00",
+            "end_time": "2026-08-12T09:00:00",
         },
     )
-    assert response_out.status_code == 201
-
-    # Call the summary endpoint for both:
-    response_summary_within = client.get(
-        f"/workers/{worker_id}/summary?start=2026-08-01T00:00:00&end=2026-08-31T00:00:00"
-    )
-    assert response_summary_within.status_code == 200
-
-    assert response_summary_within.json()["shift_count"] == 1
-    assert response_summary_within.json()["total_hours"] == 8.0  # between 17:00 and 9:00
-
-    response_summary_out = client.get(
-        f"/workers/{worker_id}/summary?start=2026-09-09T09:00:00&end=2026-09-09T17:00:00"
-    )
-    assert response_summary_out.status_code == 200
-
-    assert response_summary_out.json()["shift_count"] == 0
-    assert response_summary_out.json()["total_hours"] == 0
+    assert response.status_code == 422
+    body = response.json()["detail"][0]["msg"]
+    assert "2026-08-12T17:00:00" in body
+    assert "2026-08-12T09:00:00" in body
+    assert "must be after" in body
 
 
-def test_worker_delete(client: TestClient):
-    post_worker_response = client.post(
-        "/workers", json={"name": "Jamie Lee", "role": "Cook"}
-    )
-    assert post_worker_response.status_code == 201
-    worker_body = post_worker_response.json()
-    assert worker_body["name"] == "Jamie Lee"
-    assert worker_body["role"] == "Cook"
-    assert "id" in worker_body
-    worker_id = worker_body["id"]
-
-    delete_worker_response = client.delete(f"/workers/{worker_id}")
-    assert delete_worker_response.status_code == 204
-
-    get_worker_response = client.get(f"/workers/{worker_id}")
-    assert get_worker_response.status_code == 404
-
-
-def test_worker_with_shift_delete(client: TestClient):
-    post_worker_response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
-    assert post_worker_response.status_code == 201
-    worker_body = post_worker_response.json()
-    assert worker_body["name"] == "Jamie Lee"
-    assert worker_body["role"] == "Cook"
-    assert "id" in worker_body
-    worker_id = worker_body["id"]
-
-    post_shift_response = client.post(
+def test_invalid_shift_times_end_equals_start(client: TestClient, worker_id: int):
+    response = client.post(
         "/shifts",
         json={
             "worker_id": worker_id,
-            "start_time": "2026-08-10T09:00:00",
-            "end_time": "2026-08-10T17:00:00",
+            "start_time": "2026-08-12T09:00:00",
+            "end_time": "2026-08-12T09:00:00",
         },
     )
-    assert post_shift_response.status_code == 201
-    shift_body = post_shift_response.json()
-    assert shift_body["worker_id"] == worker_id
-    assert "id" in shift_body
-    assert "created_at" in shift_body
-    shift_id = shift_body["id"]
-
-    # Tries to delete without the header first, should return a 409
-    delete_worker_response = client.delete(f"/workers/{worker_id}")
-    assert delete_worker_response.status_code == 409
-
-    # We are asserting for "1" since 1 shift was added in the test
-    assert "1" in delete_worker_response.text
-
-    get_worker_response = client.get(f"/workers/{worker_id}")
-    assert get_worker_response.status_code == 200
-
-    get_shift_response = client.get(f"/shifts/{shift_id}")
-    assert get_shift_response.status_code == 200
-
-    # Tries to delete with the wrong header value, should return a 409
-    delete_worker_response = client.delete(f"/workers/{worker_id}", headers={"Confirm-Delete": "False"})
-    assert delete_worker_response.status_code == 409
-
-    # We are asserting for "1" since 1 shift was added in the test
-    assert "1" in delete_worker_response.text
-
-    get_worker_response = client.get(f"/workers/{worker_id}")
-    assert get_worker_response.status_code == 200
-
-    get_shift_response = client.get(f"/shifts/{shift_id}")
-    assert get_shift_response.status_code == 200
-
-    # Tries to delete with the header, should delete it successfully with a 204
-    delete_worker_response = client.delete(f"/workers/{worker_id}", headers={"Confirm-Delete": "True"})
-    assert delete_worker_response.status_code == 204
-
-    get_worker_response = client.get(f"/workers/{worker_id}")
-    assert get_worker_response.status_code == 404
-
-    get_shift_response = client.get(f"/shifts/{shift_id}")
-    assert get_shift_response.status_code == 404
+    assert response.status_code == 422
+    body = response.json()["detail"][0]["msg"]
+    assert "2026-08-12T09:00:00" in body
+    assert "must be after" in body
 
 
-def test_deactivate_worker(client: TestClient):
+def test_delete_nonexistent_shift(client: TestClient, worker_id: int):
+    create = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-12T09:00:00",
+            "end_time": "2026-08-12T17:00:00",
+        },
+    )
+    shift_id = create.json()["id"]
+
+    delete_response = client.delete(f"/shifts/{shift_id + 9999}")
+    assert delete_response.status_code == 404
+
+    get_response = client.get(f"/shifts/{shift_id}")
+    assert get_response.status_code == 200
+
+
+def test_schedule_shift_for_inactive_worker_is_rejected(client: TestClient):
     worker = client.post(
-        "/workers", json={"name": "Jamie Lee", "role": "Cook"}
+        "/workers", json={"name": "Former Worker", "role": "Cook"}
     ).json()
-
-    response = client.put(
+    client.put(
         f"/workers/{worker['id']}",
         json={"name": worker["name"], "role": worker["role"], "active": False},
     )
 
-    assert response.status_code == 200
-    assert response.json()["active"] is False
+    response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker["id"],
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Cannot schedule a shift for an inactive worker"
 
 
-def test_inactive_worker_excluded_from_default_list(client: TestClient):
-    inactive_worker = client.post(
-        "/workers", json={"name": "Jamie Lee", "role": "Cook"}
+def test_upcoming_shifts_returns_only_within_window(client: TestClient, worker_id: int):
+    now = datetime.now(timezone.utc)
+
+    within_window = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": (now + timedelta(minutes=10)).isoformat(),
+            "end_time": (now + timedelta(hours=1)).isoformat(),
+        },
     ).json()
-    client.put(
-        f"/workers/{inactive_worker['id']}",
-        json={
-            "name": inactive_worker["name"],
-            "role": inactive_worker["role"],
-            "active": False,
-        },
-    )
 
-    response = client.get("/workers")
-
-    assert response.status_code == 200
-    assert inactive_worker["id"] not in {worker["id"] for worker in response.json()}
-
-
-def test_workers_summary_multiple_workers_returns_correct_summary(client: TestClient):
-    # Create two workers
-    worker1 = client.post("/workers", json={"name": "Worker One", "role": "Role A"}).json()
-    worker2 = client.post("/workers", json={"name": "Worker Two", "role": "Role B"}).json()
-
-    # Create shifts for both workers
-    client.post(
+    out_of_window = client.post(
         "/shifts",
         json={
-            "worker_id": worker1["id"],
+            "worker_id": worker_id,
+            "start_time": (now + timedelta(hours=5)).isoformat(),
+            "end_time": (now + timedelta(hours=6)).isoformat(),
+        },
+    ).json()
+
+    response = client.get("/shifts/upcoming?minutes=30")
+
+    assert response.status_code == 200
+    ids = [s["id"] for s in response.json()]
+    assert within_window["id"] in ids
+    assert out_of_window["id"] not in ids
+
+
+def test_shift_duration(client: TestClient, worker_id: int):
+    create = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
             "start_time": "2026-08-10T09:00:00",
             "end_time": "2026-08-10T17:00:00",
         },
     )
-    client.post(
+    shift_id = create.json()["id"]
+
+    get_response = client.get(f"/shifts/{shift_id}")
+    assert get_response.status_code == 200
+
+    data = get_response.json()
+    assert data["duration_hours"] == 8.0
+
+
+def test_create_shift_with_notes(client: TestClient, worker_id: int):
+    notes = "Covering for Alex"
+    response = client.post(
         "/shifts",
         json={
-            "worker_id": worker2["id"],
-            "start_time": "2026-08-11T10:00:00",
-            "end_time": "2026-08-11T15:00:00",
-        },
-    )
-
-    # Get the summary for all workers
-    response = client.get("/workers/summary")
-    assert response.status_code == 200
-
-    summary = response.json()
-    assert summary["grand_total_hours"] == 13.0  # 8 + 5 hours
-    assert summary["total_shift_count"] == 2
-
-    worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
-    assert worker_summaries[worker1["id"]]["total_hours"] == 8.0
-    assert worker_summaries[worker1["id"]]["shift_count"] == 1
-    assert worker_summaries[worker1["id"]]["average_shift_hours"] == 8.0
-    assert worker_summaries[worker2["id"]]["total_hours"] == 5.0
-    assert worker_summaries[worker2["id"]]["shift_count"] == 1
-    assert worker_summaries[worker2["id"]]["average_shift_hours"] == 5.0
-
-
-def test_workers_summary_zero_shifts(client: TestClient):
-    # Create a worker with no shifts
-    worker = client.post("/workers", json={"name": "Worker Zero", "role": "Role Z"}).json()
-
-    # Get the summary for all workers
-    response = client.get("/workers/summary")
-    assert response.status_code == 200
-
-    summary = response.json()
-    assert summary["grand_total_hours"] == 0.0
-    assert summary["total_shift_count"] == 0
-
-    worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
-    assert worker_summaries[worker["id"]]["total_hours"] == 0.0
-    assert worker_summaries[worker["id"]]["shift_count"] == 0
-    assert worker_summaries[worker["id"]]["average_shift_hours"] == 0.0
-
-
-def test_workers_summary_filters_by_date_range(client: TestClient):
-    # Create a worker
-    worker = client.post("/workers", json={"name": "Worker Date", "role": "Role D"}).json()
-
-    # Create shifts for the worker, some within the date range and some outside
-    client.post(
-        "/shifts",
-        json={
-            "worker_id": worker["id"],
+            "worker_id": worker_id,
             "start_time": "2026-08-10T09:00:00",
             "end_time": "2026-08-10T17:00:00",
-        },
-    )
-    client.post(
-        "/shifts",
-        json={
-            "worker_id": worker["id"],
-            "start_time": "2026-09-10T09:00:00",
-            "end_time": "2026-09-10T17:00:00",
+            "notes": notes,
         },
     )
 
-    # Get the summary for all workers within a specific date range
-    response = client.get("/workers/summary?start=2026-08-01T00:00:00&end=2026-08-31T23:59:59")
-    assert response.status_code == 200
+    assert response.status_code == 201
+    body = response.json()
+    assert body["notes"] == notes
 
-    summary = response.json()
-    assert summary["grand_total_hours"] == 8.0  # Only the August shift counts
-    assert summary["total_shift_count"] == 1
-
-    worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
-    assert worker_summaries[worker["id"]]["total_hours"] == 8.0
-    assert worker_summaries[worker["id"]]["shift_count"] == 1
-    assert worker_summaries[worker["id"]]["average_shift_hours"] == 8.0
+    get_response = client.get(f"/shifts/{body['id']}")
+    assert get_response.status_code == 200
+    assert get_response.json()["notes"] == notes
 
 
-def test_workers_summary_no_date_range_includes_all_shifts(client: TestClient):
-    # Create a worker
-    worker = client.post("/workers", json={"name": "Worker All", "role": "Role A"}).json()
-
-    # Create shifts for the worker
-    client.post(
+def test_create_shift_without_notes(client: TestClient, worker_id: int):
+    response = client.post(
         "/shifts",
         json={
-            "worker_id": worker["id"],
-            "start_time": "2026-08-10T09:00:00",
-            "end_time": "2026-08-10T17:00:00",
-        },
-    )
-    client.post(
-        "/shifts",
-        json={
-            "worker_id": worker["id"],
-            "start_time": "2026-09-10T09:00:00",
-            "end_time": "2026-09-10T17:00:00",
-        },
-    )
-
-    # Get the summary for all workers without specifying a date range
-    response = client.get("/workers/summary")
-    assert response.status_code == 200
-
-    summary = response.json()
-    assert summary["grand_total_hours"] == 16.0  # Both shifts count
-    assert summary["total_shift_count"] == 2
-
-    worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
-    assert worker_summaries[worker["id"]]["total_hours"] == 16.0
-    assert worker_summaries[worker["id"]]["shift_count"] == 2
-    assert worker_summaries[worker["id"]]["average_shift_hours"] == 8.0
-
-
-def test_workers_summary_no_workers_returns_empty_list_and_zero_grand_total(client: TestClient):
-    # Ensure there are no workers in the system
-    response = client.get("/workers/summary")
-    assert response.status_code == 200
-
-    summary = response.json()
-    assert summary["grand_total_hours"] == 0.0
-    assert summary["total_shift_count"] == 0
-    assert summary["workers"] == []
-
-
-def test_workers_summary_grand_total_matches_sum_of_individual_totals(client: TestClient):
-    # Create two workers
-    worker1 = client.post("/workers", json={"name": "Worker One", "role": "Role A"}).json()
-    worker2 = client.post("/workers", json={"name": "Worker Two", "role": "Role B"}).json()
-
-    # Create shifts for both workers
-    client.post(
-        "/shifts",
-        json={
-            "worker_id": worker1["id"],
-            "start_time": "2026-08-10T09:00:00",
-            "end_time": "2026-08-10T17:00:00",
-        },
-    )
-    client.post(
-        "/shifts",
-        json={
-            "worker_id": worker2["id"],
-            "start_time": "2026-08-11T10:00:00",
-            "end_time": "2026-08-11T15:00:00",
-        },
-    )
-
-    # Get the summary for all workers
-    response = client.get("/workers/summary")
-    assert response.status_code == 200
-
-    summary = response.json()
-    total_hours_from_workers = sum(ws["total_hours"] for ws in summary["workers"])
-    assert summary["grand_total_hours"] == total_hours_from_workers
-
-
-def test_workers_summary_total_shift_count_matches_sum_of_individual_counts(client: TestClient):
-    # Create two workers
-    worker1 = client.post("/workers", json={"name": "Worker One", "role": "Role A"}).json()
-    worker2 = client.post("/workers", json={"name": "Worker Two", "role": "Role B"}).json()
-
-    # Create shifts for both workers
-    client.post(
-        "/shifts",
-        json={
-            "worker_id": worker1["id"],
-            "start_time": "2026-08-10T09:00:00",
-            "end_time": "2026-08-10T17:00:00",
-        },
-    )
-    client.post(
-        "/shifts",
-        json={
-            "worker_id": worker2["id"],
-            "start_time": "2026-08-11T10:00:00",
-            "end_time": "2026-08-11T15:00:00",
-        },
-    )
-
-    # Get the summary for all workers
-    response = client.get("/workers/summary")
-    assert response.status_code == 200
-
-    summary = response.json()
-    total_shift_count_from_workers = sum(ws["shift_count"] for ws in summary["workers"])
-    assert summary["total_shift_count"] == total_shift_count_from_workers
-
-
-def test_workers_summary_average_shift_hours(client: TestClient):
-    # create two workers
-    worker1 = client.post("/workers", json={"name": "Worker Average 1", "role": "Role A"}).json()
-    worker2 = client.post("/workers", json={"name": "Worker Average 2", "role": "Role B"}).json()
-
-    # create shifts for the workers
-    client.post(
-        "/shifts",
-        json={
-            "worker_id": worker1["id"],
+            "worker_id": worker_id,
             "start_time": "2026-08-10T09:00:00",
             "end_time": "2026-08-10T17:00:00",
         },
     )
 
-    client.post(
+    assert response.status_code == 201
+    assert response.json()["notes"] is None
+
+
+def test_create_shift_rejects_notes_over_max_length(client: TestClient, worker_id: int):
+    response = client.post(
         "/shifts",
         json={
-            "worker_id": worker1["id"],
-            "start_time": "2026-08-11T10:00:00",
-            "end_time": "2026-08-11T15:00:00",
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+            "notes": "x" * 301,
         },
     )
 
-    client.post(
-        "/shifts",
-        json={
-            "worker_id": worker2["id"],
-            "start_time": "2026-09-10T09:00:00",
-            "end_time": "2026-09-10T17:00:00",
-        },
-    )
-
-    client.post(
-        "/shifts",
-        json={
-            "worker_id": worker2["id"],
-            "start_time": "2026-09-12T12:00:00",
-            "end_time": "2026-09-12T18:00:00",
-        },
-    )
-
-    # Get the summary for all workers
-    response = client.get("/workers/summary")
-    assert response.status_code == 200
-
-    summary = response.json()
-    assert summary["grand_total_hours"] == 27.0
-    assert summary["total_shift_count"] == 4
-
-    worker_summaries = {ws["worker_id"]: ws for ws in summary["workers"]}
-    assert worker_summaries[worker1["id"]]["total_hours"] == 13.0  # 8 + 5
-    assert worker_summaries[worker1["id"]]["shift_count"] == 2
-    assert worker_summaries[worker1["id"]]["average_shift_hours"] == 6.5
-    assert worker_summaries[worker2["id"]]["total_hours"] == 14.0  # 8 + 6
-    assert worker_summaries[worker2["id"]]["shift_count"] == 2
-    assert worker_summaries[worker2["id"]]["average_shift_hours"] == 7.0
+    assert response.status_code == 422
 
 
-def test_worker_pay(client: TestClient):
-    positive_response = client.post(
-        "/workers",
-        json={"name": "Jamie Lee", "role": "Cook", "pay": 25.60},
-    )
-    assert positive_response.status_code == 201
-    body = positive_response.json()
-    assert body["name"] == "Jamie Lee"
-    assert body["role"] == "Cook"
-    assert body["pay"] == 25.60
-    assert "id" in body
-
+def test_reject_long_shift(client: TestClient, worker_id: int):
     boundary_response = client.post(
-        "/workers",
-        json={"name": "Jamie Lee", "role": "Cook", "pay": 0},
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-16T06:00:00",
+            "end_time": "2026-08-17T06:00:00",
+        },
     )
     assert boundary_response.status_code == 201
-    body = boundary_response.json()
-    assert body["name"] == "Jamie Lee"
-    assert body["role"] == "Cook"
-    assert body["pay"] == 0
-    assert "id" in body
 
-    negative_response = client.post(
-        "/workers",
-        json={"name": "Jamie Lee", "role": "Cook", "pay": -20},
+    over_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-17T06:00:00",
+            "end_time": "2026-08-18T06:00:01",
+        },
     )
-    assert negative_response.status_code == 422
-    body = negative_response.json()["detail"][0]["msg"]
-    assert "Pay cannot be a negative value." in body
+    assert over_response.status_code == 422
 
-    null_response = client.post(
-        "/workers",
-        json={"name": "Jamie Lee", "role": "Cook"},
+
+def test_reject_short_shift(client: TestClient, worker_id: int):
+    boundary_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-16T06:00:00",
+            "end_time": "2026-08-16T06:30:00",
+        },
     )
-    assert null_response.status_code == 201
-    body = null_response.json()
-    assert body["name"] == "Jamie Lee"
-    assert body["role"] == "Cook"
-    assert body["pay"] is None
-    assert "id" in body
+    assert boundary_response.status_code == 201
+
+    under_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-17T06:00:00",
+            "end_time": "2026-08-17T06:29:00",
+        },
+    )
+    assert under_response.status_code == 422
+
+
+def test_shifts_today_includes_shift_starting_today(client: TestClient, worker_id: int):
+    today_8am = datetime.now(timezone.utc).replace(
+        hour=8, minute=0, second=0, microsecond=0, tzinfo=None
+    )
+
+    create_res = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": today_8am.isoformat(),
+            "end_time": (today_8am + timedelta(hours=8)).isoformat(),
+        },
+    )
+    assert create_res.status_code == 201
+    shift_id = create_res.json()["id"]
+
+    response = client.get("/shifts/today")
+    assert response.status_code == 200
+    ids = [s["id"] for s in response.json()]
+    assert shift_id in ids
+
+
+def test_shifts_today_excludes_shift_starting_tomorrow(client: TestClient, worker_id: int):
+    tomorrow_8am = datetime.now(timezone.utc).replace(
+        hour=8, minute=0, second=0, microsecond=0, tzinfo=None
+    ) + timedelta(days=1)
+
+    create_res = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": tomorrow_8am.isoformat(),
+            "end_time": (tomorrow_8am + timedelta(hours=8)).isoformat(),
+        },
+    )
+    assert create_res.status_code == 201
+    shift_id = create_res.json()["id"]
+
+    response = client.get("/shifts/today")
+    assert response.status_code == 200
+    ids = [s["id"] for s in response.json()]
+    assert shift_id not in ids
+
+
+def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(
+    client: TestClient, worker_id: int
+):
+    yesterday_10pm = datetime.now(timezone.utc).replace(
+        hour=22, minute=0, second=0, microsecond=0, tzinfo=None
+    ) - timedelta(days=1)
+
+    create_res = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": yesterday_10pm.isoformat(),
+            "end_time": (yesterday_10pm + timedelta(hours=8)).isoformat(),
+        },
+    )
+    assert create_res.status_code == 201
+    shift_id = create_res.json()["id"]
+
+    response = client.get("/shifts/today")
+    assert response.status_code == 200
+    ids = [s["id"] for s in response.json()]
+    assert shift_id not in ids
 
