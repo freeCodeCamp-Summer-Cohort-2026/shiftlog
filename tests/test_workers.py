@@ -578,3 +578,178 @@ def test_worker_pay(client: TestClient):
     assert body["role"] == "Cook"
     assert body["pay"] == None
     assert "id" in body
+
+
+def test_multi_worker_overview(client: TestClient):
+    # Create multiple workers
+    worker1 = client.post("/workers", json={"name": "Worker One", "role": "Role A"}).json()
+    worker2 = client.post("/workers", json={"name": "Worker Two", "role": "Role B"}).json()
+
+    # Create shifts for both workers
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker1["id"],
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker2["id"],
+            "start_time": "2026-08-11T10:00:00",
+            "end_time": "2026-08-11T15:00:00",
+        },
+    )
+
+    # Get the overview for all workers
+    response = client.get("/workers/overview")
+    assert response.status_code == 200
+
+    overview = response.json()
+    assert len(overview["workers"]) == 2
+
+    worker_overview = {wo["id"]: wo for wo in overview["workers"]}
+    assert worker_overview[worker1["id"]]["id"] == worker1["id"]
+    assert worker_overview[worker2["id"]]["id"] == worker2["id"]
+    assert worker_overview[worker1["id"]]["name"] == "Worker One"
+    assert worker_overview[worker1["id"]]["role"] == "Role A"
+    assert worker_overview[worker2["id"]]["name"] == "Worker Two"
+    assert worker_overview[worker2["id"]]["role"] == "Role B"
+    assert worker_overview[worker1["id"]]["total_hours"] == 8.0
+    assert worker_overview[worker1["id"]]["shift_count"] == 1
+    assert worker_overview[worker2["id"]]["total_hours"] == 5.0
+    assert worker_overview[worker2["id"]]["shift_count"] == 1
+
+
+def test_multi_worker_overview_with_date_range(client: TestClient):
+    # Create multiple workers
+    worker1 = client.post("/workers", json={"name": "Worker One", "role": "Role A"}).json()
+    worker2 = client.post("/workers", json={"name": "Worker Two", "role": "Role B"}).json()
+
+    # Create shifts for both workers, some within the date range and some outside
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker1["id"],
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker1["id"],
+            "start_time": "2026-09-10T09:00:00",
+            "end_time": "2026-09-10T17:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker2["id"],
+            "start_time": "2026-08-11T10:00:00",
+            "end_time": "2026-08-11T15:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker2["id"],
+            "start_time": "2026-09-11T10:00:00",
+            "end_time": "2026-09-11T15:00:00",
+        },
+    )
+
+    # Get the overview for all workers within a specific date range
+    response = client.get("/workers/overview?start=2026-08-01T00:00:00&end=2026-08-31T23:59:59")
+    assert response.status_code == 200
+
+    overview = response.json()
+    assert len(overview["workers"]) == 2
+
+    worker_overview = {wo["id"]: wo for wo in overview["workers"]}
+    assert worker_overview[worker1["id"]]["total_hours"] == 8.0  # Only the August shift counts
+    assert worker_overview[worker1["id"]]["shift_count"] == 1
+    assert worker_overview[worker2["id"]]["total_hours"] == 5.0  # Only the August shift counts
+    assert worker_overview[worker2["id"]]["shift_count"] == 1
+
+
+def test_multi_worker_overview_no_date_range_includes_all_shifts(client: TestClient):
+    # Create multiple workers
+    worker1 = client.post("/workers", json={"name": "Worker One", "role": "Role A"}).json()
+    worker2 = client.post("/workers", json={"name": "Worker Two", "role": "Role B"}).json()
+
+    # Create shifts for both workers
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker1["id"],
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker1["id"],
+            "start_time": "2026-09-10T09:00:00",
+            "end_time": "2026-09-10T17:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker2["id"],
+            "start_time": "2026-08-11T10:00:00",
+            "end_time": "2026-08-11T15:00:00",
+        },
+    )
+    client.post(
+        "/shifts",
+        json={
+            "worker_id": worker2["id"],
+            "start_time": "2026-09-11T10:00:00",
+            "end_time": "2026-09-11T15:00:00",
+        },
+    )
+
+    # Get the overview for all workers without specifying a date range
+    response = client.get("/workers/overview")
+    assert response.status_code == 200
+
+    overview = response.json()
+    assert len(overview["workers"]) == 2
+
+    worker_overview = {wo["id"]: wo for wo in overview["workers"]}
+    assert worker_overview[worker1["id"]]["total_hours"] == 16.0  # Both shifts count
+    assert worker_overview[worker1["id"]]["shift_count"] == 2
+    assert worker_overview[worker2["id"]]["total_hours"] == 10.0  # Both shifts count
+    assert worker_overview[worker2["id"]]["shift_count"] == 2
+
+
+def test_workers_overview_zero_shifts(client: TestClient):
+    # Create a worker with no shifts
+    worker = client.post("/workers", json={"name": "Worker Zero", "role": "Role Z"}).json()
+
+    # Get the overview for all workers
+    response = client.get("/workers/overview")
+    assert response.status_code == 200
+
+    overview = response.json()
+    assert len(overview["workers"]) == 1
+
+    worker_overview = overview["workers"][0]
+    assert worker_overview["id"] == worker["id"]
+    assert worker_overview["total_hours"] == 0.0
+    assert worker_overview["shift_count"] == 0
+
+
+def test_workers_overview_no_workers_returns_empty_list(client: TestClient):
+    # Ensure there are no workers in the system
+    response = client.get("/workers/overview")
+    assert response.status_code == 200
+
+    overview = response.json()
+    assert overview["workers"] == []

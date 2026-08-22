@@ -122,3 +122,15 @@ class RejectedShift(SQLModel):
 class BulkShiftResponse(SQLModel):
     accepted_shifts: list[ShiftRead]
     rejected_shifts: list[RejectedShift]
+
+
+class WorkerOverview(SQLModel):
+    id: int
+    name: str
+    role: str
+    total_hours: float
+    shift_count: int
+
+
+class WorkersOverview(SQLModel):
+    workers: list[WorkerOverview]
