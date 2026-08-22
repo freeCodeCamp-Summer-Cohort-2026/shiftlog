@@ -1,11 +1,12 @@
 """Shift management routes for creating, querying, bulk importing, and deleting shifts.
+
 Authentication Policy:
 - Mutating endpoints (POST, DELETE) require a valid JWT Bearer token via `require_auth`.
 - Read-only endpoints (GET) are publicly accessible without authentication to allow
   team-wide visibility into schedules, upcoming shifts, today's roster, and conflicts.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -85,7 +86,7 @@ def update_shift(
     shift_id: int,
     shift_data: ShiftUpdate,
     session: Session = Depends(get_session),
-    current_worker: Worker = Depends(require_auth)
+    current_worker: Worker = Depends(require_auth),
 ):
     """
     PUT request:
@@ -102,12 +103,10 @@ def update_shift(
     - 404 if worker_id is not found
     - 409 if shift conflicts with an existing shift for the worker
     """
-    # 1. Fetch existing shift record
     db_shift = session.get(Shift, shift_id)
     if db_shift is None:
         raise HTTPException(status_code=404, detail="Shift not found")
 
-    # 2. Verify worker exists and is active
     worker = session.get(Worker, shift_data.worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -117,7 +116,6 @@ def update_shift(
             detail="Cannot schedule a shift for an inactive worker",
         )
 
-    # 3. Check for shift conflicts (excluding the shift currently being updated!)
     conflicts = find_conflicting_shifts(
         session,
         shift_data.worker_id,
@@ -132,7 +130,6 @@ def update_shift(
             detail=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}",
         )
 
-    # 4. Update attributes
     db_shift.worker_id = shift_data.worker_id
     db_shift.start_time = shift_data.start_time
     db_shift.end_time = shift_data.end_time
@@ -142,8 +139,9 @@ def update_shift(
     session.commit()
     session.refresh(db_shift)
     return db_shift
-  
-@router.post("/bulk", response_model=BulkShiftResponse, status_code=200)
+
+
+@router.post("/bulk", response_model=BulkShiftResponse, status_code=201)
 @limiter.limit("10/30seconds")
 def create_shifts_bulk(
     request: Request,
@@ -187,11 +185,9 @@ def create_shifts_bulk(
             )
             continue
 
-        # Check against persisted DB shifts
         conflicts = find_conflicting_shifts(
             session, shift.worker_id, shift.start_time, shift.end_time
         )
-        # Check against shifts accepted earlier in this exact bulk batch
         intra_batch_conflict = any(
             accepted.worker_id == shift.worker_id
             and max(accepted.start_time, shift.start_time) < min(accepted.end_time, shift.end_time)
@@ -267,6 +263,7 @@ def list_shifts(
 
     return session.exec(statement).all()
 
+
 @router.get("/upcoming", response_model=list[ShiftRead])
 def list_upcoming_shifts(
     minutes: int = Query(
@@ -290,27 +287,6 @@ def list_upcoming_shifts(
     """
     return get_upcoming_shifts(session=session, worker_id=worker_id, lookahead_minutes=minutes)
 
-@router.get("/today", response_model=list[ShiftRead])
-def list_today_shifts(
-    worker_id: int | None = None,
-    session: Session = Depends(get_session)
-):
-    """Shifts starting within the current UTC calendar day.
-    Filters on start_time only, consistent with how /shifts and /shifts/upcoming
-    already filter. A shift that started yesterday and runs past midnight into
-    today is not included since its start_time falls on the previous day
-    """
-    today=datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    tomorrow=today+timedelta(days=1)
-    
-    statement=select(Shift).where(tomorrow>Shift.start_time)
-    statement=statement.where(Shift.start_time>=today)
-    if worker_id is not None:
-        statement = statement.where(Shift.worker_id == worker_id)
-
-    all_shifts = session.exec(statement).all()
-
-    return all_shifts
 
 @router.get("/today", response_model=list[ShiftRead])
 def list_today_shifts(
@@ -329,7 +305,7 @@ def list_today_shifts(
     -----------
     Publicly accessible without authentication.
     """
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
     tomorrow = today + timedelta(days=1)
 
     statement = select(Shift).where(Shift.start_time >= today, Shift.start_time < tomorrow)
@@ -364,7 +340,6 @@ def list_conflicts(session: Session = Depends(get_session)):
         for i in range(n):
             for j in range(i + 1, n):
                 s1, s2 = shifts[i], shifts[j]
-                # Overlap condition: max(start1, start2) < min(end1, end2)
                 if max(s1.start_time, s2.start_time) < min(s1.end_time, s2.end_time):
                     conflicting_ids.add(s1.id)
                     conflicting_ids.add(s2.id)
