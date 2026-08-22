@@ -7,7 +7,7 @@ Tests for feature #10, https://github.com/freeCodeCamp-Summer-Cohort-2026/shiftl
 # Then create required shifts
 # And report invalid and conflicting shifts
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from fastapi.testclient import TestClient
 
@@ -86,7 +86,7 @@ def test_create_shift_recurrent_invalid_duration(client: TestClient, worker_id: 
                     f" and duration 2 centuries.")
 
 def test_create_shift_recurring_by_period(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     start_time = (now + timedelta(days=2, hours=5))
     end_time = (now + timedelta(days=2, hours=6))
 
@@ -125,7 +125,7 @@ def test_create_shift_recurring_by_period(client: TestClient, worker_id: int):
     assert len(data) == 9  # Initial shift plus eight added
 
 def test_create_shift_recurring_by_period_with_conflict(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     start_time = (now + timedelta(days=9, hours=1))
     end_time = (now + timedelta(days=9, hours=8))
 
@@ -193,7 +193,7 @@ def test_create_shift_recurring_by_period_with_conflict(client: TestClient, work
     assert len(data) == 9  # Existing two shifts, plus initial and six added
 
 def test_create_shift_recurring_by_period_week_day_mondays(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     # This week day is variable, so we add this and start recurrence on
     # the next matching week day
     start_time = (now + timedelta(days=2, hours=2))
@@ -232,7 +232,6 @@ def test_create_shift_recurring_by_period_week_day_mondays(client: TestClient, w
           f" data={data}")
 
 def test_create_shift_recurring_by_period_week_day_thursday(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
     # This week day is known, matching our period, so we start recurrence on
     # this week day
     start_time = datetime.fromisoformat("2026-10-01T08:00:00")  # Thursday
@@ -276,7 +275,6 @@ def test_create_shift_recurring_by_period_week_day_thursday(client: TestClient, 
 
 
 def test_create_shift_recurring_by_period_week_day_saturday(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
     # This week day is known, matching our period, so we start recurrence on
     # this week day
     start_time = datetime.fromisoformat("2026-10-03T08:00:00")  # Saturday
@@ -319,7 +317,7 @@ def test_create_shift_recurring_by_period_week_day_saturday(client: TestClient, 
           f" data={data}")
 
 def test_create_shift_recurring_daily_repeat(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     start_time = (now + timedelta(days=2, hours=1))
     end_time = (now + timedelta(days=2, hours=7))
 
@@ -358,7 +356,7 @@ def test_create_shift_recurring_daily_repeat(client: TestClient, worker_id: int)
     assert len(data) == 11  # Initial shift plus ten added
 
 def test_create_shift_recurring_weekly_repeat(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     start_time = (now + timedelta(days=2, hours=1))
     end_time = (now + timedelta(days=2, hours=7))
 
@@ -397,7 +395,7 @@ def test_create_shift_recurring_weekly_repeat(client: TestClient, worker_id: int
     assert len(data) == 5  # Initial shift plus 4 weeks added
 
 def test_create_shift_recurring_monthly_repeat(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     start_time = (now + timedelta(days=2, hours=1))
     end_time = (now + timedelta(days=2, hours=7))
 
@@ -436,7 +434,7 @@ def test_create_shift_recurring_monthly_repeat(client: TestClient, worker_id: in
     assert len(data) == 4  # Initial shift plus 3 months added
 
 def test_create_shift_recurring_daily_end_date(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     start_time = (now + timedelta(days=2, hours=1))
     end_time = (now + timedelta(days=2, hours=7))
     end_date = (now + timedelta(days=72, hours=1))
@@ -476,7 +474,7 @@ def test_create_shift_recurring_daily_end_date(client: TestClient, worker_id: in
     assert len(data) == 71  # Initial shift plus seventy added
 
 def test_create_shift_recurring_weekly_end_date_less_than_start(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     start_time = (now + timedelta(days=2, hours=1))
     end_time = (now + timedelta(days=2, hours=7))
     end_date = (now + timedelta(days=2))
