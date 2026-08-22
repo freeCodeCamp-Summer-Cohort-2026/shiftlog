@@ -12,10 +12,9 @@ from typing import Optional
 from pydantic import computed_field, field_validator
 from sqlmodel import Field, SQLModel
 
-
 class WorkerBase(SQLModel):
     name: str = Field(min_length=1, max_length=100)
-    role: str = Field(min_length=1, max_length=50)
+    role: str = Field(default="Worker", min_length=1, max_length=50)
     active: bool = Field(default=True, description="Indicates whether the worker is active or not")
     pay: Optional[float] = Field(default=None, description="Hourly pay of the worker")
 
@@ -36,6 +35,17 @@ class WorkerBase(SQLModel):
     
 class Worker(WorkerBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    username: Optional[str] = Field(default=None,unique=True,index=True)
+    password_hash: Optional[str] = Field(default=None)
+
+class RegisterRequest(SQLModel):
+    name: str
+    username: str
+    password: str
+
+class LoginRequest(SQLModel):
+    username: str
+    password: str
 
 
 class WorkerCreate(WorkerBase):
@@ -48,6 +58,7 @@ class WorkerUpdate(WorkerBase):
 
 class WorkerRead(WorkerBase):
     id: int
+    username: Optional[str] = None
 
 
 class ShiftBase(SQLModel):
@@ -122,3 +133,7 @@ class RejectedShift(SQLModel):
 class BulkShiftResponse(SQLModel):
     accepted_shifts: list[ShiftRead]
     rejected_shifts: list[RejectedShift]
+
+class TokenResponse(SQLModel):
+    token: str
+    worker:WorkerRead

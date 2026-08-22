@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlmodel import Session, col, select
 
+from app.auth import require_auth
 from app.database import get_session
 from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate, OrgHoursSummary
 from app.rate_limiter import limiter
@@ -11,12 +12,14 @@ from app.routers import shifts
 
 router = APIRouter(prefix="/workers", tags=["workers"])
 
+
 @router.post("", response_model=WorkerRead, status_code=201)
 @limiter.limit("10/30seconds")
 def create_worker(
     request: Request,
     worker: WorkerCreate,
     session: Session = Depends(get_session),
+    current_worker: Worker = Depends(require_auth),
 ):
     """
     POST request:
@@ -41,6 +44,7 @@ def update_worker(
     worker_id: int,
     worker: WorkerUpdate,
     session: Session = Depends(get_session),
+    current_worker: Worker = Depends(require_auth),
 ):
     """
     PUT request:
@@ -76,19 +80,19 @@ def update_worker(
 
 @router.get("", response_model=list[WorkerRead])
 def list_workers(
-    session: Session = Depends(get_session), 
+    session: Session = Depends(get_session),
     role: Optional[str] = Query(
         default=None,
         description="Filter workers by their job role",
-        examples=["Cashier", "Cook"]
+        examples=["Cashier", "Cook"],
     ),
     name: Optional[str] = Query(
-		default=None,
-		description="Filter workers by name (case-insensitive)",
-		examples=["Carmen Diaz", "carmen"]
-		),
-    include_inactive: bool = Query(default=False)
-    ):
+        default=None,
+        description="Filter workers by name (case-insensitive)",
+        examples=["Carmen Diaz", "carmen"],
+    ),
+    include_inactive: bool = Query(default=False),
+):
     """
     GET request:
     Get all active workers in the database with optional role and/or name filtering.
@@ -106,7 +110,7 @@ def list_workers(
     if name is not None:
         # used icontains() for case-insensitivity; added col from SQLmodel to avoid type warning in IDE
         statement = statement.where(col(Worker.name).icontains(name))
-        
+
     return session.exec(statement).all()
 
 
@@ -177,25 +181,45 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
 
 @router.delete("/{worker_id}", status_code=204)
 @limiter.limit("10/30seconds")
-def delete_worker(request: Request, worker_id: int, session: Session = Depends(get_session)):
+def delete_worker(
+    request: Request,
+    worker_id: int,
+    session: Session = Depends(get_session),
+    current_worker: Worker = Depends(require_auth),
+):
+    """
+    DELETE request:
+    Delete a worker and cascade delete their assigned shifts.
+    -----------
+    - **worker_id**: integer database ID
+    -----------
+    Throws a 404 error if the worker is not found.
+    """
     worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
 
-    workerShifts = shifts.list_shifts(worker_id, None, None, None, "asc", session)
+    # Cascade delete shifts assigned to this worker
+    shifts_statement = select(Shift).where(Shift.worker_id == worker_id)
+    worker_shifts = session.exec(shifts_statement).all()
 
-    confirmDelete = request.headers.get("Confirm-Delete")
-    
-    if workerShifts:
-        if confirmDelete and (confirmDelete.lower() == "true"):
-            for i in range(0,len(workerShifts)):
-                session.delete(workerShifts[i])
+    confirm_delete = request.headers.get("Confirm-Delete")
+
+    if worker_shifts:
+        if confirm_delete and confirm_delete.lower() == "true":
+            for shift in worker_shifts:
+                session.delete(shift)
         else:
-            raise HTTPException(status_code=409, detail=f"Worker has {len(workerShifts)} shifts. To delete the worker and their shifts, resend the request with the header Confirm-Delete: true")
-            
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Worker has {len(worker_shifts)} shifts. To delete the worker "
+                    "and their shifts, resend the request with the header Confirm-Delete: true"
+                ),
+            )
+
     session.delete(worker)
     session.commit()
-
 
 @router.get("/{worker_id}/summary", response_model=WorkerSummary)
 def get_worker_hours_summary(
@@ -204,6 +228,16 @@ def get_worker_hours_summary(
     end: Optional[datetime] = None,
     session: Session = Depends(get_session),
 ):
+    """
+    GET request:
+    Get total hours worked and shift count for a specific worker within an optional time range.
+    -----------
+    - **worker_id**: integer database ID
+    - **start**: optional ISO-8601 datetime start filter
+    - **end**: optional ISO-8601 datetime end filter
+    -----------
+    Throws a 404 error if the worker is not found.
+    """
     worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
@@ -215,7 +249,6 @@ def get_worker_hours_summary(
         statement = statement.where(Shift.start_time <= end)
 
     shifts = session.exec(statement).all()
-
     total_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
     average_shift_hours = total_hours / len(shifts) if len(shifts) != 0 else 0.0
 
@@ -225,4 +258,3 @@ def get_worker_hours_summary(
         shift_count=len(shifts),
         average_shift_hours=round(average_shift_hours, 2)
         )
-

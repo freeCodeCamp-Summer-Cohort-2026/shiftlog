@@ -19,6 +19,7 @@ services:
     build: .
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-shiftlog}:${POSTGRES_PASSWORD:-shiftlog_dev_password}@db:5432/${POSTGRES_DB:-shiftlog}
+      JWT_SECRET: ${JWT_SECRET:-shiftlog-dev-secret-change-this}
     ports:
       - "8000:8000"
     depends_on:
@@ -29,3 +30,4 @@ services:
 
 volumes:
   shiftlog_pgdata:
+  
