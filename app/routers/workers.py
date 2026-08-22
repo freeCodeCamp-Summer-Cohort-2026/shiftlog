@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, select, not_
 
 from app.database import get_session
 from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate, OrgHoursSummary
@@ -158,6 +158,21 @@ def get_workers_hours_summary(
         total_shift_count=total_shift_count
     )
 
+
+@router.get("/unscheduled", response_model=list[WorkerRead])
+def get_unscheduled_workers(session: Session = Depends(get_session)):
+    """
+    GET request:
+    Return all workers who currently have no shifts.
+    ------------
+    This queries the database for workers for whom no matching Shift.worker_id exists.
+    -----------
+    
+    """
+    shift_exists = select(Shift).where(Shift.worker_id == Worker.id).exists()
+    unscheduled_workers_query = select(Worker).where(Worker.active ==True, not_(shift_exists))
+
+    return session.exec(unscheduled_workers_query).all()
 
 @router.get("/{worker_id}", response_model=WorkerRead)
 def get_worker(worker_id: int, session: Session = Depends(get_session)):

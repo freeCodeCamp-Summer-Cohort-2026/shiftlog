@@ -58,6 +58,95 @@ def test_list_workers(client: TestClient):
     assert names == {"Jamie Lee", "Sam Osei"}
 
 
+def test_unscheduled_workers_includes_workers_without_shifts(client: TestClient):
+    response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
+    assert response.status_code == 201
+    body = response.json()
+
+    response = client.get("/workers/unscheduled")
+    assert response.status_code == 200
+    returned_ids = {w["id"] for w in response.json()}
+    assert body["id"] in returned_ids    
+
+
+def test_unscheduled_workers_excludes_worker_with_shifts(client: TestClient):
+    response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
+    assert response.status_code == 201
+    body = response.json()
+    worker_id = body["id"]
+
+    shift_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": "2026-08-10T09:00:00",
+            "end_time": "2026-08-10T17:00:00",
+        },
+    )
+
+    assert shift_response.status_code == 201
+
+    response = client.get("/workers/unscheduled")
+    assert response.status_code == 200
+    returned_ids = {w["id"] for w in response.json()}
+    assert body["id"] not in returned_ids
+
+
+def test_unscheduled_workers_exclude_inactive_workers(client: TestClient):
+    response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
+    assert response.status_code == 201
+    body = response.json()
+
+    worker_id = body["id"]
+
+    update_res = client.put(f"/workers/{worker_id}", json={"name": "Jamie Lee", "role": "Cook", "active": False})
+    assert update_res.status_code == 200
+    assert update_res.json()["active"] is False
+
+    response = client.get("/workers/unscheduled")
+    assert response.status_code == 200
+    returned_ids = {w["id"] for w in response.json()}
+    assert body["id"] not in returned_ids
+
+
+def test_unscheduled_workers_return_empty_list_when_all_workers_scheduled(client: TestClient):
+    worker1_response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
+    worker2_response = client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
+
+    assert worker1_response.status_code == 201
+    assert worker2_response.status_code == 201
+
+    body1 = worker1_response.json()
+    body2 = worker2_response.json()
+    worker_id1 = body1["id"]
+    worker_id2 = body2["id"]
+
+    shift1_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id1,
+            "start_time": "2026-08-21T09:00:00",
+            "end_time": "2026-08-21T17:00:00",
+        },
+    )
+
+    shift2_response = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id2,
+            "start_time": "2026-08-21T12:00:00",
+            "end_time": "2026-08-21T17:00:00",
+        },
+    )
+
+    assert shift1_response.status_code == 201
+    assert shift2_response.status_code == 201
+
+    response = client.get("/workers/unscheduled")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_get_worker_not_found(client: TestClient):
     response = client.get("/workers/999")
     assert response.status_code == 404
