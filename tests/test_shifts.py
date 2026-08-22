@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from fastapi.testclient import TestClient
 
@@ -119,7 +119,7 @@ def test_schedule_shift_for_inactive_worker_is_rejected(client: TestClient):
 
 
 def test_upcoming_shifts_returns_only_within_window(client: TestClient, worker_id: int):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     # case 1: inside the window (starts in 10 minutes)
     within_window = client.post(
@@ -428,7 +428,9 @@ def test_update_shift_inactive_worker(client: TestClient, worker_id: int):
 
 def test_shifts_today_includes_shift_starting_today(client: TestClient, worker_id: int):
     # Create a shift:
-    today_8am = datetime.utcnow().replace(hour=8, minute=0, second=0, microsecond=0)
+    today_8am = datetime.now(UTC).replace(
+        hour=8, minute=0, second=0, microsecond=0
+    )
 
     create_res = client.post(
         "/shifts",
@@ -447,8 +449,12 @@ def test_shifts_today_includes_shift_starting_today(client: TestClient, worker_i
     assert shift_id in ids
 
 
-def test_shifts_today_excludes_shift_starting_tomorrow(client: TestClient, worker_id: int):
-    tomorrow_8am = datetime.utcnow().replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
+def test_shifts_today_excludes_shift_starting_tomorrow(
+    client: TestClient, worker_id: int
+):
+    tomorrow_8am = datetime.now(UTC).replace(
+        hour=8, minute=0, second=0, microsecond=0
+    ) + timedelta(days=1)
 
     create_res = client.post(
         "/shifts",
@@ -467,8 +473,12 @@ def test_shifts_today_excludes_shift_starting_tomorrow(client: TestClient, worke
     assert shift_id not in ids
 
 
-def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(client: TestClient, worker_id: int):
-    yesterday_10pm = datetime.utcnow().replace(hour=22, minute=0, second=0, microsecond=0) - timedelta(days=1)
+def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(
+    client: TestClient, worker_id: int
+):
+    yesterday_10pm = datetime.now(UTC).replace(
+        hour=22, minute=0, second=0, microsecond=0
+    ) - timedelta(days=1)
 
     create_res = client.post(
         "/shifts",
