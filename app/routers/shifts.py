@@ -203,6 +203,7 @@ def list_shifts(
     sort_by: Literal["start_time", "end_time", "created_at"] | None = None,
     order: Literal["asc", "desc"] = "asc",
     session: Session = Depends(get_session),
+    include_archived: bool = False,
 ):
     """List shifts, optionally filtered by worker and/or a date range.
 
@@ -211,6 +212,8 @@ def list_shifts(
     shifts starting in that window.
     """
     statement = select(Shift)
+    if not include_archived:
+        statement = statement.where(Shift.archived == False)
     if worker_id is not None:
         statement = statement.where(Shift.worker_id == worker_id)
     if start_after is not None:
@@ -250,7 +253,7 @@ def list_today_shifts(
     today=datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow=today+timedelta(days=1)
     
-    statement=select(Shift).where(tomorrow>Shift.start_time)
+    statement=select(Shift).where(Shift.archived == False, tomorrow>Shift.start_time)
     statement=statement.where(Shift.start_time>=today)
     if worker_id is not None:
         statement = statement.where(Shift.worker_id == worker_id)
@@ -332,5 +335,6 @@ def delete_shift(request: Request, shift_id: int, session: Session = Depends(get
     shift = session.get(Shift, shift_id)
     if shift is None:
         raise HTTPException(status_code=404, detail="Shift not found")
-    session.delete(shift)
+    shift.archived = True
+    session.add(shift)
     session.commit()

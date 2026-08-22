@@ -36,6 +36,7 @@ def get_upcoming_shifts(
         statement = (
             select(Shift)
             .where(
+                Shift.archived == False,
                 Shift.worker_id == worker_id,
                 Shift.start_time >= now,
                 Shift.start_time <= horizon,
@@ -46,6 +47,7 @@ def get_upcoming_shifts(
         statement = (
                 select(Shift)
                 .where(
+                    Shift.archived == False,
                     Shift.start_time >= now,
                     Shift.start_time <= horizon,
                 )
