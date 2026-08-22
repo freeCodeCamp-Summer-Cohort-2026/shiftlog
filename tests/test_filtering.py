@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from fastapi.testclient import TestClient
 
@@ -93,14 +93,14 @@ def test_list_upcoming_shifts_unfiltered(client: TestClient):
         _create_shift(
             client,
             worker["id"],
-            (datetime.utcnow() + timedelta(minutes=10)).isoformat(),
-            (datetime.utcnow() + timedelta(hours=6, minutes=10)).isoformat(),
+            (datetime.now(UTC) + timedelta(minutes=10)).isoformat(),
+            (datetime.now(UTC) + timedelta(hours=6, minutes=10)).isoformat(),
         )
         _create_shift(
             client,
             worker["id"],
-            (datetime.utcnow() + timedelta(hours=8)).isoformat(),
-            (datetime.utcnow() + timedelta(hours=14)).isoformat(),
+            (datetime.now(UTC) + timedelta(hours=8)).isoformat(),
+            (datetime.now(UTC) + timedelta(hours=14)).isoformat(),
         )
 
     response = client.get("/shifts/upcoming", params={"minutes": 15})
@@ -119,14 +119,14 @@ def test_list_upcoming_shifts_filtered_by_worker(client: TestClient, worker_id: 
         _create_shift(
             client,
             worker["id"],
-            (datetime.utcnow() + timedelta(minutes=10)).isoformat(),
-            (datetime.utcnow() + timedelta(hours=6, minutes=10)).isoformat(),
+            (datetime.now(UTC) + timedelta(minutes=10)).isoformat(),
+            (datetime.now(UTC) + timedelta(hours=6, minutes=10)).isoformat(),
         )
         _create_shift(
             client,
             worker["id"],
-            (datetime.utcnow() + timedelta(hours=8)).isoformat(),
-            (datetime.utcnow() + timedelta(hours=14)).isoformat(),
+            (datetime.now(UTC) + timedelta(hours=8)).isoformat(),
+            (datetime.now(UTC) + timedelta(hours=14)).isoformat(),
         )
 
     response = client.get("/shifts/upcoming", params={"minutes": 15, "worker_id": target_worker_id})
