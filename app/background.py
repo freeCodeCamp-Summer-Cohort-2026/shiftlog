@@ -10,7 +10,7 @@ endpoint" issue).
 import asyncio
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from sqlmodel import Session, select
 
@@ -30,7 +30,7 @@ def get_upcoming_shifts(
     now: datetime | None = None,
 ) -> list[Shift]:
     """Return shifts starting between `now` and `now + lookahead_minutes`."""
-    now = now or datetime.utcnow()
+    now = now or datetime.now(UTC)
     horizon = now + timedelta(minutes=lookahead_minutes)
     if worker_id is not None:
         statement = (
