@@ -1,8 +1,12 @@
 from datetime import datetime
 from typing import Optional
 
+import io
+import csv
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlmodel import Session, col, select
+from fastapi.responses import StreamingResponse
+from sqlmodel import Session, select, col
 
 from app.database import get_session
 from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate, OrgHoursSummary
@@ -109,6 +113,46 @@ def list_workers(
         
     return session.exec(statement).all()
 
+@router.get("/export")
+def export_worker_list(session: Session = Depends(get_session)):
+    """
+    Docstring for export_worker_list
+    
+    :param session: Description
+    :type session: Session
+
+    exports all workers as a downloadable CSV file.
+
+    mirrors '/shifts/export' endpoint so both resources are consistent.
+    """
+    workers = session.exec(select(Worker)).all()
+    
+    # create an in-memory stream so we can write to it
+    output = io.StringIO()
+
+    # create a csv writer
+    writer = csv.writer(output)
+
+    fieldnames = ["ID", "Name", "Role", "Active", "Hourly Pay"]
+    
+    # write heading row
+    writer.writerow(fieldnames)
+
+    for worker in workers:
+        # write data rows
+        writer.writerow([worker.id, worker.name, worker.role, worker.active, getattr(worker, "pay", None)])
+
+    # move cursor to the beginning of the stream
+    output.seek(0)
+
+    # returns file named workers.csv as a response
+    return StreamingResponse(
+        output,
+        headers={
+            "Content-Disposition": "attachment; filename=workers.csv",
+            "Content-Type": "text/csv",
+        }
+    )
 
 @router.get("/summary", response_model=OrgHoursSummary)
 def get_workers_hours_summary(

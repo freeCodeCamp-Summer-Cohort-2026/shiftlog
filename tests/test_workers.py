@@ -1,4 +1,6 @@
 import pytest
+import csv
+import io
 from fastapi.testclient import TestClient
 
 
@@ -57,6 +59,30 @@ def test_list_workers(client: TestClient):
     names = {w["name"] for w in response.json()}
     assert names == {"Jamie Lee", "Sam Osei"}
 
+def test_list_workers_exports(client: TestClient):
+    # creating a fake worker
+    worker = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook", "active": True, "pay": 20})
+    assert worker.status_code == 201
+    fake_worker = worker.json()
+
+    response = client.get("/workers/export")
+    assert response.status_code == 200
+    assert response.headers["Content-Type"] == "text/csv"
+    assert response.headers["Content-Disposition"] == "attachment; filename=workers.csv"
+
+    # asserting that response has expected content in it
+    reader = csv.reader(io.StringIO(response.text))
+    rows = list(reader)
+
+    assert rows[0] == ["ID", "Name", "Role", "Active", "Hourly Pay"]
+    assert len(rows) == 2  # header + one worker row
+
+    row = rows[1]
+    assert row[0] == str(fake_worker["id"])
+    assert row[1] == fake_worker["name"]
+    assert row[2] == fake_worker["role"]
+    assert row[3] == str(fake_worker["active"])
+    assert row[4] == str(fake_worker.get("pay", ""))
 
 def test_get_worker_not_found(client: TestClient):
     response = client.get("/workers/999")
