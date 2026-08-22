@@ -84,7 +84,8 @@ def create_shift(
 def update_shift(
     shift_id: int,
     shift_data: ShiftUpdate,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_worker: Worker = Depends(require_auth)
 ):
     """
     PUT request:
