@@ -1,4 +1,3 @@
-
 from datetime import datetime, timedelta, UTC
 from typing import Literal, Annotated
 
@@ -18,10 +17,9 @@ from app.models import (
     ShiftConflictGroup,
     ShiftCreate,
     ShiftRead,
-    Worker, 
-    ShiftUpdate
+    Worker,
+    ShiftUpdate,
     DeleteBulkShiftResponse,
-
 )
 
 from app.rate_limiter import limiter
@@ -73,11 +71,7 @@ def create_shift(
 
 
 @router.put("/{shift_id}", response_model=ShiftRead)
-def update_shift(
-    shift_id: int,
-    shift_data: ShiftUpdate,
-    session: Session = Depends(get_session)
-):
+def update_shift(shift_id: int, shift_data: ShiftUpdate, session: Session = Depends(get_session)):
     """
     PUT request:
     Update an existing shift record by its ID.
@@ -133,13 +127,11 @@ def update_shift(
     session.commit()
     session.refresh(db_shift)
     return db_shift
+
+
 @router.post("/bulk", response_model=BulkShiftResponse, status_code=201)
 @limiter.limit("10/30seconds")
-def create_shifts_bulk(
-    request: Request,
-    shifts: list[ShiftCreate], 
-    session: Session = Depends(get_session)
-):
+def create_shifts_bulk(request: Request, shifts: list[ShiftCreate], session: Session = Depends(get_session)):
     """
     POST request:
     ---
@@ -156,13 +148,13 @@ def create_shifts_bulk(
     If any worker ID does not exist, an error will be thrown.
     If any shift conflicts with existing shifts for the same worker, an error will be thrown.
     """
-    
+
     if len(shifts) > 10:
         raise HTTPException(
             status_code=400,
             detail="Bulk shift creation limit exceeded. Maximum 10 shifts allowed per request.",
         )
-    
+
     db_shifts = []
     rejected_shifts = []
     for shift in shifts:
@@ -197,25 +189,26 @@ def create_shifts_bulk(
         accepted_shifts=[ShiftRead.model_validate(s) for s in db_shifts], rejected_shifts=rejected_shifts
     )
 
+
 @router.delete("/bulk", response_model=DeleteBulkShiftResponse, status_code=200)
 @limiter.limit("10/30seconds")
 def delete_shifts_bulk(request: Request, shift_ids: list[int], session: Session = Depends(get_session)):
-    '''
+    """
     Endpoint accepts a list of IDs,
-    loops through them, check which ones are valid and which ones 
+    loops through them, check which ones are valid and which ones
     do not exist or are invalid.
     IDs that do not exist are collected in a list,
     and IDs that exist are collected in another list
     and deleted.
     it returns both lists
-    '''
+    """
     if len(shift_ids) > 10:
         raise HTTPException(
             status_code=400,
             detail="Bulk shift deletion limit exceeded. Maximum 10 shifts allowed per request.",
-    )
-    not_found_ids=[]
-    deleted_ids=[]
+        )
+    not_found_ids = []
+    deleted_ids = []
     for shift_id in shift_ids:
         shift = session.get(Shift, shift_id)
         if shift is None:
@@ -227,10 +220,7 @@ def delete_shifts_bulk(request: Request, shift_ids: list[int], session: Session 
 
     session.commit()
 
-    return DeleteBulkShiftResponse(
-        not_found_ids=not_found_ids,
-        deleted_ids=deleted_ids
-    )
+    return DeleteBulkShiftResponse(not_found_ids=not_found_ids, deleted_ids=deleted_ids)
 
 
 @router.get("", response_model=list[ShiftRead])
@@ -269,27 +259,26 @@ def list_upcoming_shifts(
     job's lookahead window)."""
     return get_upcoming_shifts(session=session, worker_id=worker_id, lookahead_minutes=minutes)
 
+
 @router.get("/today", response_model=list[ShiftRead])
-def list_today_shifts(
-    worker_id: int | None = None,
-    session: Session = Depends(get_session)
-):
+def list_today_shifts(worker_id: int | None = None, session: Session = Depends(get_session)):
     """Shifts starting within the current UTC calendar day.
     Filters on start_time only, consistent with how /shifts and /shifts/upcoming
     already filter. A shift that started yesterday and runs past midnight into
     today is not included since its start_time falls on the previous day
     """
-    today=datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    tomorrow=today+timedelta(days=1)
-    
-    statement=select(Shift).where(tomorrow>Shift.start_time)
-    statement=statement.where(Shift.start_time>=today)
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow = today + timedelta(days=1)
+
+    statement = select(Shift).where(tomorrow > Shift.start_time)
+    statement = statement.where(Shift.start_time >= today)
     if worker_id is not None:
         statement = statement.where(Shift.worker_id == worker_id)
 
     all_shifts = session.exec(statement).all()
 
     return all_shifts
+
 
 @router.get("/conflicts", response_model=list[ShiftConflictGroup])
 def list_conflicts(session: Session = Depends(get_session)):
