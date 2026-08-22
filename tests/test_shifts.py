@@ -519,3 +519,7 @@ def test_delete_shifts_bulk_batch_with_nonexistent_ids(client: TestClient, worke
 
     assert existing_id in deleting_response.json()["deleted_ids"]
     assert non_existent_id in deleting_response.json()["not_found_ids"]
+
+def test_delete_shifts_bulk_exceeds_limit(client: TestClient):
+    response = client.request("DELETE", "/shifts/bulk", json=list(range(1, 12)))
+    assert response.status_code == 400

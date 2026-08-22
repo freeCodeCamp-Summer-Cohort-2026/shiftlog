@@ -207,6 +207,11 @@ def delete_shifts_bulk(request: Request, shift_ids: list[int], session: Session 
     and deleted.
     it returns both lists
     '''
+    if len(shift_ids) > 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Bulk shift deletion limit exceeded. Maximum 10 shifts allowed per request.",
+    )
     not_found_ids=[]
     deleted_ids=[]
     for shift_id in shift_ids:
