@@ -9,11 +9,13 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select, col
 
 from app.database import get_session
-from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate, OrgHoursSummary
+
+from app.models import FilterParams, Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate, OrgHoursSummary
 from app.rate_limiter import limiter
 from app.routers import shifts
 
 router = APIRouter(prefix="/workers", tags=["workers"])
+
 
 @router.post("", response_model=WorkerRead, status_code=201)
 @limiter.limit("10/30seconds")
@@ -80,19 +82,15 @@ def update_worker(
 
 @router.get("", response_model=list[WorkerRead])
 def list_workers(
-    session: Session = Depends(get_session), 
+    session: Session = Depends(get_session),
     role: Optional[str] = Query(
-        default=None,
-        description="Filter workers by their job role",
-        examples=["Cashier", "Cook"]
+        default=None, description="Filter workers by their job role", examples=["Cashier", "Cook"]
     ),
     name: Optional[str] = Query(
-		default=None,
-		description="Filter workers by name (case-insensitive)",
-		examples=["Carmen Diaz", "carmen"]
-		),
-    include_inactive: bool = Query(default=False)
-    ):
+        default=None, description="Filter workers by name (case-insensitive)", examples=["Carmen Diaz", "carmen"]
+    ),
+    include_inactive: bool = Query(default=False),
+):
     """
     GET request:
     Get all active workers in the database with optional role and/or name filtering.
@@ -110,7 +108,7 @@ def list_workers(
     if name is not None:
         # used icontains() for case-insensitivity; added col from SQLmodel to avoid type warning in IDE
         statement = statement.where(col(Worker.name).icontains(name))
-        
+
     return session.exec(statement).all()
 
 @router.get("/export")
@@ -219,6 +217,7 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Worker not found")
     return worker
 
+
 @router.delete("/{worker_id}", status_code=204)
 @limiter.limit("10/30seconds")
 def delete_worker(request: Request, worker_id: int, session: Session = Depends(get_session)):
@@ -226,7 +225,7 @@ def delete_worker(request: Request, worker_id: int, session: Session = Depends(g
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
 
-    workerShifts = shifts.list_shifts(worker_id, None, None, None, "asc", session)
+    workerShifts = shifts.list_shifts(FilterParams(worker_id=worker_id, order="asc"), session)
 
     confirmDelete = request.headers.get("Confirm-Delete")
     

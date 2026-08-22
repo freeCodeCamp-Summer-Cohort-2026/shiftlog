@@ -99,9 +99,7 @@ def test_delete_nonexistent_shift(client: TestClient, worker_id: int):
 
 
 def test_schedule_shift_for_inactive_worker_is_rejected(client: TestClient):
-    worker = client.post(
-        "/workers", json={"name": "Former Worker", "role": "Cook"}
-    ).json()
+    worker = client.post("/workers", json={"name": "Former Worker", "role": "Cook"}).json()
     client.put(
         f"/workers/{worker['id']}",
         json={"name": worker["name"], "role": worker["role"], "active": False},
@@ -149,6 +147,7 @@ def test_upcoming_shifts_returns_only_within_window(client: TestClient, worker_i
     ids = [s["id"] for s in response.json()]
     assert within_window["id"] in ids
     assert out_of_window["id"] not in ids
+
 
 def test_shift_duration(client: TestClient, worker_id: int):
     create = client.post(
@@ -274,9 +273,7 @@ def test_create_shift_without_notes(client: TestClient, worker_id: int):
     assert response.json()["notes"] is None
 
 
-def test_create_shift_rejects_notes_over_max_length(
-    client: TestClient, worker_id: int
-):
+def test_create_shift_rejects_notes_over_max_length(client: TestClient, worker_id: int):
     response = client.post(
         "/shifts",
         json={
@@ -323,14 +320,47 @@ def test_reject_short_shift(client: TestClient, worker_id: int):
     assert boundary_response.status_code == 201
 
     under_response = client.post(
-        "/shifts",
-        json={
-            "worker_id": worker_id,
-            "start_time": "2026-08-17T06:00:00",
-            "end_time": "2026-08-17T06:29:00",
-        },
+        "/shifts", json={"worker_id": worker_id, "start_time": "2026-08-17T06:00:00", "end_time": "2026-08-17T06:29:00"}
     )
     assert under_response.status_code == 422
+
+
+def test_shifts_result_without_pagination(client: TestClient, three_shifts):
+    res = client.get("/shifts")
+    assert res.status_code == 200
+    assert len(res.json()) == 3
+
+
+def test_shifts_pagination_result(client: TestClient, three_shifts):
+    res = client.get("/shifts?limit=2&offset=2")
+    data = res.json()
+    assert len(data) == 1
+    assert res.status_code == 200
+    first_shift = data[0]
+
+    assert isinstance(first_shift["id"], int)
+    assert isinstance(first_shift["start_time"], str)
+    assert isinstance(first_shift["end_time"], str)
+    assert isinstance(first_shift["worker_id"], int)
+
+
+def test_shifts_result_with_only_limit(client: TestClient, three_shifts):
+    res = client.get("/shifts?limit=1")
+    assert res.status_code == 200
+    assert len(res.json()) == 1
+
+
+def test_shifts_result_with_only_offset(client: TestClient, three_shifts):
+    res = client.get("/shifts?offset=1")
+    data = res.json()
+    assert res.status_code == 200
+    assert len(data) == 2
+
+    first_shift = data[0]
+    assert first_shift["start_time"] == "2026-08-11T10:00:00"
+
+    assert data[1]["start_time"] == "2026-08-11T12:00:00"
+
 
 def test_update_shift_notes(client: TestClient, worker_id: int):
     # Create shift with notes
@@ -377,9 +407,7 @@ def test_update_shift_inactive_worker(client: TestClient, worker_id: int):
     shift_id = create.json()["id"]
 
     # Create a second worker and deactivate them
-    worker2 = client.post(
-        "/workers", json={"name": "Alex Smith", "role": "Cashier"}
-    ).json()
+    worker2 = client.post("/workers", json={"name": "Alex Smith", "role": "Cashier"}).json()
     client.put(
         f"/workers/{worker2['id']}",
         json={"name": worker2["name"], "role": worker2["role"], "active": False},
@@ -395,15 +423,10 @@ def test_update_shift_inactive_worker(client: TestClient, worker_id: int):
         },
     )
     assert update_res.status_code == 400
-    assert (
-        update_res.json()["detail"]
-        == "Cannot schedule a shift for an inactive worker"
-    )
+    assert update_res.json()["detail"] == "Cannot schedule a shift for an inactive worker"
 
 
-def test_shifts_today_includes_shift_starting_today(
-    client: TestClient, worker_id: int
-):
+def test_shifts_today_includes_shift_starting_today(client: TestClient, worker_id: int):
     # Create a shift:
     today_8am = datetime.now(UTC).replace(
         hour=8, minute=0, second=0, microsecond=0
