@@ -15,6 +15,7 @@ from app.database import create_db_and_tables, get_session
 from app.rate_limiter import limiter
 from app.routers import shifts, workers
 from app.routers import auth
+from app.config import get_jwt_secret
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("shiftlog.main")
@@ -22,6 +23,9 @@ logger = logging.getLogger("shiftlog.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Validate JWT secret at startup (fails fast if missing or < 32 characters)
+    get_jwt_secret()
+
     try:
         create_db_and_tables()
     except Exception:
