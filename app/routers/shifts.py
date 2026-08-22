@@ -1,9 +1,14 @@
-from datetime import datetime, timedelta, UTC
-from typing import Literal
 
+import io
+from datetime import datetime, timedelta, UTC
+
+
+from typing import Literal
+import csv
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import asc, desc
 from sqlmodel import Session, select
+from fastapi.responses import StreamingResponse
 
 from app.background import DEFAULT_LOOKAHEAD_MINUTES, get_upcoming_shifts
 from app.conflicts import find_conflicting_shifts
@@ -168,9 +173,7 @@ def create_shifts_bulk(
             rejected_shifts.append(RejectedShift(shift=shift, reason=f"Worker {shift.worker_id} is not active"))
             continue
 
-        conflicts = find_conflicting_shifts(
-            session, shift.worker_id, shift.start_time, shift.end_time
-        )
+        conflicts = find_conflicting_shifts(session, shift.worker_id, shift.start_time, shift.end_time)
         if conflicts:
             conflict_ids = ", ".join(str(c.id) for c in conflicts)
             rejected_shifts.append(
@@ -190,8 +193,7 @@ def create_shifts_bulk(
     for db_shift in db_shifts:
         session.refresh(db_shift)
     return BulkShiftResponse(
-        accepted_shifts=[ShiftRead.model_validate(s) for s in db_shifts],
-        rejected_shifts=rejected_shifts
+        accepted_shifts=[ShiftRead.model_validate(s) for s in db_shifts], rejected_shifts=rejected_shifts
     )
 
 
@@ -229,9 +231,7 @@ def list_shifts(
 
 @router.get("/upcoming", response_model=list[ShiftRead])
 def list_upcoming_shifts(
-        minutes: int = DEFAULT_LOOKAHEAD_MINUTES,
-        worker_id: int | None = None,
-        session: Session = Depends(get_session)
+    minutes: int = DEFAULT_LOOKAHEAD_MINUTES, worker_id: int | None = None, session: Session = Depends(get_session)
 ):
     """Shifts starting within the next `minutes` (defaults to the background
     job's lookahead window)."""
@@ -258,6 +258,44 @@ def list_today_shifts(
     all_shifts = session.exec(statement).all()
 
     return all_shifts
+
+@router.get("/export", status_code=200)
+def shift_export_svc(start: datetime, end: datetime, session: Session = Depends(get_session)):
+    statement = select(Shift)
+    statement = statement.where(Shift.start_time >= start, Shift.end_time <= end)
+    data = session.exec(statement).all()
+    fieldnames = [
+        "id",
+        "worker_id",
+        "start_time",
+        "end_time",
+        "created_at",
+        "duration_hours",
+    ]
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for shift in data:
+        duration_hours = round((shift.end_time - shift.start_time).total_seconds() / 3600, 2)
+        writer.writerow(
+            {
+                "id": shift.id,
+                "worker_id": shift.worker_id,
+                "start_time": shift.start_time,
+                "created_at": shift.created_at,
+                "end_time": shift.end_time,
+                "duration_hours": duration_hours,
+            }
+        )
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="shifts.csv"'},
+    )
+
 
 @router.get("/conflicts", response_model=list[ShiftConflictGroup])
 def list_conflicts(session: Session = Depends(get_session)):

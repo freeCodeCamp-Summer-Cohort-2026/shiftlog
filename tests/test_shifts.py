@@ -1,4 +1,10 @@
+
+import csv
+
+import io
+
 from datetime import datetime, timedelta, UTC
+
 
 from fastapi.testclient import TestClient
 
@@ -99,9 +105,7 @@ def test_delete_nonexistent_shift(client: TestClient, worker_id: int):
 
 
 def test_schedule_shift_for_inactive_worker_is_rejected(client: TestClient):
-    worker = client.post(
-        "/workers", json={"name": "Former Worker", "role": "Cook"}
-    ).json()
+    worker = client.post("/workers", json={"name": "Former Worker", "role": "Cook"}).json()
     client.put(
         f"/workers/{worker['id']}",
         json={"name": worker["name"], "role": worker["role"], "active": False},
@@ -274,9 +278,7 @@ def test_create_shift_without_notes(client: TestClient, worker_id: int):
     assert response.json()["notes"] is None
 
 
-def test_create_shift_rejects_notes_over_max_length(
-    client: TestClient, worker_id: int
-):
+def test_create_shift_rejects_notes_over_max_length(client: TestClient, worker_id: int):
     response = client.post(
         "/shifts",
         json={
