@@ -142,7 +142,8 @@ def update_shift(
     session.commit()
     session.refresh(db_shift)
     return db_shift
-@router.post("/bulk", response_model=BulkShiftCreateResponse, status_code=200)
+  
+@router.post("/bulk", response_model=BulkShiftResponse, status_code=200)
 @limiter.limit("10/30seconds")
 def create_shifts_bulk(
     request: Request,
@@ -150,7 +151,7 @@ def create_shifts_bulk(
     session: Session = Depends(get_session),
     current_worker: Worker = Depends(require_auth),
 ):
-"""
+    """
     POST request:
     Bulk create shifts with validation and partial batch processing.
     -----------
@@ -209,7 +210,7 @@ def create_shifts_bulk(
 
         db_shift = Shift.model_validate(shift)
         session.add(db_shift)
-        session.flush()  # Ensure the shift gets an ID before committing
+        session.flush()
         db_shifts.append(db_shift)
 
     session.commit()
