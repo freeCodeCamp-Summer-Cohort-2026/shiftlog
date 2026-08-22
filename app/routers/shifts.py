@@ -142,28 +142,37 @@ def update_shift(
     session.commit()
     session.refresh(db_shift)
     return db_shift
-@router.post("/bulk", response_model=BulkShiftResponse, status_code=201)
+@router.post("/bulk", response_model=BulkShiftCreateResponse, status_code=200)
+@limiter.limit("10/30seconds")
 def create_shifts_bulk(
+    request: Request,
     shifts: list[ShiftCreate],
     session: Session = Depends(get_session),
     current_worker: Worker = Depends(require_auth),
 ):
-    """
+"""
     POST request:
-    Create multiple shifts for workers in bulk.
+    Bulk create shifts with validation and partial batch processing.
     -----------
-    - Accepts a JSON list of shift creation objects.
+    - Accepts a JSON list of shift creation objects (maximum 10 shifts per request).
     -----------
     Requirements & Validations:
     - Requires Bearer authentication (`require_auth`).
+    - Maximum 10 shifts allowed per bulk request (throws 400 if exceeded).
+    - Rate limited to 10 requests per 30 seconds.
     - Evaluates each shift independently:
       * Valid shifts are committed and returned in `accepted_shifts`.
       * Shifts failing validation (worker not found, inactive worker, DB conflict,
         or intra-batch conflict) are skipped and itemized in `rejected_shifts` with the reason.
     """
+    if len(shifts) > 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Bulk shift creation limit exceeded. Maximum 10 shifts allowed per request.",
+        )
+
     db_shifts: list[Shift] = []
     rejected_shifts: list[RejectedShift] = []
-
     for shift in shifts:
         worker = session.get(Worker, shift.worker_id)
         if worker is None:
@@ -181,7 +190,7 @@ def create_shifts_bulk(
         conflicts = find_conflicting_shifts(
             session, shift.worker_id, shift.start_time, shift.end_time
         )
-# Check against shifts accepted earlier in this exact bulk batch
+        # Check against shifts accepted earlier in this exact bulk batch
         intra_batch_conflict = any(
             accepted.worker_id == shift.worker_id
             and max(accepted.start_time, shift.start_time) < min(accepted.end_time, shift.end_time)
@@ -200,7 +209,7 @@ def create_shifts_bulk(
 
         db_shift = Shift.model_validate(shift)
         session.add(db_shift)
-        session.flush() # Ensure the shift gets an ID before committing
+        session.flush()  # Ensure the shift gets an ID before committing
         db_shifts.append(db_shift)
 
     session.commit()
@@ -257,7 +266,6 @@ def list_shifts(
 
     return session.exec(statement).all()
 
-
 @router.get("/upcoming", response_model=list[ShiftRead])
 def list_upcoming_shifts(
     minutes: int = Query(
@@ -291,7 +299,7 @@ def list_today_shifts(
     already filter. A shift that started yesterday and runs past midnight into
     today is not included since its start_time falls on the previous day
     """
-    today=datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today=datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow=today+timedelta(days=1)
     
     statement=select(Shift).where(tomorrow>Shift.start_time)

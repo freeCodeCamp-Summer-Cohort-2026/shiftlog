@@ -48,6 +48,25 @@ def create_shift_request(
     )
 
 
+def create_bulk_shift_request(
+    client: TestClient,
+    _: Session,
+    worker_id: int,
+    request_number: int,
+) -> Response:
+    day = request_number + 1
+    return client.post(
+        "/shifts/bulk",
+        json=[
+            {
+                "worker_id": worker_id,
+                "start_time": f"2026-09-{day:02d}T09:00:00",
+                "end_time": f"2026-09-{day:02d}T17:00:00",
+            }
+        ],
+    )
+
+
 def update_worker_request(
     client: TestClient,
     _: Session,
@@ -148,6 +167,14 @@ RATE_LIMITED_ENDPOINTS = [
             success_status_code=204,
         ),
         id="delete-worker",
+    ),
+    pytest.param(
+        RateLimitedEndpoint(
+            request_factory=create_bulk_shift_request,
+            allowed_requests=10,
+            success_status_code=201,
+        ),
+        id="create-bulk-shift",
     )
 ]
 
