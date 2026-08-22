@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, UTC
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import asc, desc
@@ -20,6 +20,7 @@ from app.models import (
     DeleteBulkShiftResponse,
 )
 from app.rate_limiter import limiter
+from app.recurrence import recurrence_maker
 
 router = APIRouter(prefix="/shifts", tags=["shifts"])
 
@@ -30,6 +31,10 @@ def create_shift(
     request: Request,
     shift: ShiftCreate,
     session: Session = Depends(get_session),
+    period: Optional[str] = None,
+    duration: Optional[str] = None,
+    repeat: Optional[int] = None,
+    end_date: Optional[datetime] = None
 ):
     """
     POST request:
@@ -41,6 +46,18 @@ def create_shift(
     - **End time**
     - **Worker ID**
     ---
+    Optional Fields (for recurring shifts)
+    - **Period**: [ "daily", "weekly", "5days", "biweekly", "monthly", "quarterly", "yearly"]
+    - **Duration**": ["day", "week", "month", "year"]
+    - **Repeat**: int
+    - **End Date**: datetime
+
+    - Period if None, there is no recurrence, otherwise one of Duration or Repeat or End Date must be set;
+    - If none of these, then is single shift (original behavior), returns no recurrence == None
+    - If Period is set but no limit, an error should be returned
+    - Duration, Repeat, End Date if all set, limit is the first reached
+    - If conflicting shifts exist, they are ignored (still to define how to communicate)
+
     - If a worker ID does not exist, an error will be thrown.
     """
     worker = session.get(Worker, shift.worker_id)
@@ -57,13 +74,24 @@ def create_shift(
         conflict_ids = ", ".join(str(c.id) for c in conflicts)
         raise HTTPException(
             status_code=409,
-            detail=(f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"),
+            detail=f"Shift conflicts with existing shift(s) for this worker: {conflict_ids}"
         )
 
-    db_shift = Shift.model_validate(shift)
-    session.add(db_shift)
-    session.commit()
-    session.refresh(db_shift)
+    print(f"DEBUG: create_shift input {shift.worker_id=}, {shift.period=}, {shift.duration=}, {shift.repeat=}, {shift.end_date=})")
+    # Recurrence validation and generation
+    # Single shift is created if none Period, Duration, Repeat and End Date
+    # For Recurrent shifts, the start_time and end_time, define also the initial date of recurrence
+    all_shifts: list[ShiftCreate] = []
+    all_shifts.append(shift)
+    recurrent_shifts = recurrence_maker(shift, session, period, duration, repeat, end_date)
+    if recurrent_shifts is not None:
+        all_shifts.extend(recurrent_shifts)
+    db_shift = Shift.model_validate(shift)  # It is repeated to avoid code smell
+    for rshift in all_shifts:
+        db_shift = Shift.model_validate(rshift)
+        session.add(db_shift)
+        session.commit()
+        session.refresh(db_shift)
     return db_shift
 
 
