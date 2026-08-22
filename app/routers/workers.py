@@ -75,7 +75,9 @@ def update_worker(
 
 
 @router.get("", response_model=list[WorkerRead])
+@limiter.limit("10/30seconds")
 def list_workers(
+    request: Request,
     session: Session = Depends(get_session), 
     role: Optional[str] = Query(
         default=None,
@@ -87,7 +89,10 @@ def list_workers(
 		description="Filter workers by name (case-insensitive)",
 		examples=["Carmen Diaz", "carmen"]
 		),
-    include_inactive: bool = Query(default=False)
+    include_inactive: bool = Query(default=False),
+    # Pagination parameters
+    limit: int = Query(default=10, le=10, description="Max number of workers to return"),
+    offset: int = Query(default=0, ge=0, description="Number of workers to skip")
     ):
     """
     GET request:
@@ -106,6 +111,9 @@ def list_workers(
     if name is not None:
         # used icontains() for case-insensitivity; added col from SQLmodel to avoid type warning in IDE
         statement = statement.where(col(Worker.name).icontains(name))
+
+    # applying limit and offset
+    statement = statement.limit(limit).offset(offset)
         
     return session.exec(statement).all()
 

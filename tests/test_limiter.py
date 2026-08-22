@@ -127,6 +127,16 @@ def delete_worker_request(
 
     return client.delete(f"/workers/{worker.id}", headers={"Confirm-Delete":"True"})
 
+def list_workers_request(
+    client: TestClient,
+    session: Session,
+    worker_id: int,
+    request_number: int,
+) -> Response:
+    workers_list = client.get("/workers")
+
+    return workers_list
+
 RATE_LIMITED_ENDPOINTS = [
     pytest.param(
         RateLimitedEndpoint(
@@ -175,6 +185,14 @@ RATE_LIMITED_ENDPOINTS = [
             success_status_code=201,
         ),
         id="create-bulk-shift",
+    ),
+    pytest.param(
+        RateLimitedEndpoint(
+            request_factory=list_workers_request,
+            allowed_requests=10,
+            success_status_code=200,
+        ),
+        id="list-workers",
     )
 ]
 
