@@ -133,3 +133,8 @@ class FilterParams(SQLModel):
     end_before: Optional[datetime.datetime] = Field(None)
     sort_by: Literal["start_time", "end_time", "created_at"] = Field("start_time")
     order: Literal["asc", "desc"] = Field("asc")
+
+
+class DeleteBulkShiftResponse(SQLModel):
+    deleted_ids: list[int]
+    not_found_ids: list[int]
