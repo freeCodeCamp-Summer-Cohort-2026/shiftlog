@@ -1,10 +1,11 @@
-import os
 from typing import Optional
+
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import Session
 
+from app.config import get_jwt_secret
 from app.database import get_session
 from app.models import Worker
 
@@ -28,9 +29,7 @@ def require_auth(
         )
 
     token = credentials.credentials
-    secret = os.getenv("JWT_SECRET")
-    if not secret:
-        raise RuntimeError("JWT_SECRET is not configured")
+    secret = get_jwt_secret()
 
     try:
         payload = jwt.decode(token, secret, algorithms=["HS256"])
@@ -51,4 +50,4 @@ def require_auth(
         )
 
     return worker
-        
+
