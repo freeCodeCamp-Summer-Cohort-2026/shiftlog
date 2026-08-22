@@ -403,8 +403,8 @@ def test_shifts_today_includes_shift_starting_today(
     client: TestClient, worker_id: int
 ):
     # Create a shift:
-    today_8am = datetime.now(UTC).replace(
-        hour=8, minute=0, second=0, microsecond=0
+    today_8am = datetime.now(timezone.utc).replace(
+        hour=8, minute=0, second=0, microsecond=0, tzinfo=None
     )
 
     create_res = client.post(
@@ -427,8 +427,8 @@ def test_shifts_today_includes_shift_starting_today(
 def test_shifts_today_excludes_shift_starting_tomorrow(
     client: TestClient, worker_id: int
 ):
-    tomorrow_8am = datetime.now(UTC).replace(
-        hour=8, minute=0, second=0, microsecond=0
+    tomorrow_8am = datetime.now(timezone.utc).replace(
+        hour=8, minute=0, second=0, microsecond=0, tzinfo=None
     ) + timedelta(days=1)
 
     create_res = client.post(
@@ -451,8 +451,8 @@ def test_shifts_today_excludes_shift_starting_tomorrow(
 def test_shifts_today_excludes_shift_starting_yesterday_past_midnight(
     client: TestClient, worker_id: int
 ):
-    yesterday_10pm = datetime.now(UTC).replace(
-        hour=22, minute=0, second=0, microsecond=0
+    yesterday_10pm = datetime.now(timezone.utc).replace(
+        hour=22, minute=0, second=0, microsecond=0, tzinfo=None
     ) - timedelta(days=1)
 
     create_res = client.post(
